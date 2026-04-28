@@ -95,6 +95,8 @@ class Args:
     """Attention implementation to use (default: None)"""
     num_proc: int = 8
     """Number of processes for dataset operations (default: 8)"""
+    dataloader_num_workers: int = 4
+    """Number of worker processes for DataLoader (default: 4)"""
 
     # system args
     load_json: bool = False
@@ -411,6 +413,8 @@ def rewardbench(args: Args):
             # collate_fn = lambda x: x, # fix weird batching error
             shuffle=False,
             drop_last=False,
+            num_workers=args.dataloader_num_workers,
+            pin_memory=torch.cuda.is_available(),
         )
 
     ############################
@@ -485,6 +489,8 @@ def rewardbench(args: Args):
             batch_size=args.batch_size,
             shuffle=False,
             drop_last=False,
+            num_workers=args.dataloader_num_workers,
+            pin_memory=torch.cuda.is_available(),
         )
 
         model = accelerator.prepare(reward_pipe.model)
@@ -520,11 +526,11 @@ def rewardbench(args: Args):
                 score_chosen_batch = rewards_chosen.float().cpu().numpy().tolist()
                 score_rejected_batch = rewards_rejected.float().cpu().numpy().tolist()
 
-            # log results
-            [
-                results.append(1) if chosen > rejected else results.append(0)
-                for chosen, rejected in zip(score_chosen_batch, score_rejected_batch)
-            ]
+            # log results (vectorized for performance)
+            batch_results = (
+                np.array(score_chosen_batch) > np.array(score_rejected_batch)
+            ).astype(int).tolist()
+            results.extend(batch_results)
             scores_chosen.extend(score_chosen_batch)
             scores_rejected.extend(score_rejected_batch)
         else:

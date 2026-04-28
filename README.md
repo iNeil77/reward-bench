@@ -46,7 +46,7 @@ It also will detect if a instruction dataset is passed (by checking for not havi
 
 ### Installation
 
-**With UV (recommended):**
+**Method 1: Package Install with UV (recommended for users):**
 ```bash
 uv pip install rewardbench
 
@@ -54,7 +54,7 @@ uv pip install rewardbench
 uv pip install rewardbench[generative]
 ```
 
-**With pip:**
+**Method 2: Package Install with pip:**
 ```bash
 pip install rewardbench
 
@@ -62,43 +62,138 @@ pip install rewardbench
 pip install rewardbench[generative]
 ```
 
-**For development:**
+**Method 3: Editable Install for Development (recommended for contributors):**
 ```bash
+# Clone the repository
 git clone https://github.com/allenai/reward-bench.git
 cd reward-bench
+
+# Install uv if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install in editable mode (changes to code take effect immediately)
 uv sync                      # base install
-uv sync --extra generative   # with generative support
-```
-**To run RewardBench 2, you can run the following command, substituting the model you would like to run and adding any additional model-specific parameters, which can be found in the [eval configs](https://github.com/allenai/reward-bench/blob/main/scripts/configs/eval_configs.yaml) in `scripts/configs/eval_configs.yaml`**
-```
-python scripts/run_v2.py --model={yourmodel}
+uv sync --extra generative   # with generative support (API + vLLM)
+uv sync --extra api          # API-only (OpenAI, Anthropic, etc.)
+uv sync --extra dev          # development tools (black, pytest, etc.)
+
+# Run scripts directly
+uv run python scripts/run_v2.py --model=your-model
+uv run rewardbench --model=your-model
 ```
 
-Generative models can be run on RewardBench 2 either with a rankings-based prompt (comparing 4 responses in one go, the default) or a ratings-based prompt (scoring each response separately then recombining, run with `--score_w_ratings` flag). Note that our Ties subset, new in RewardBench 2, has up to 20+ completions to score per-prompt, so the code enforces that it runs in the ratings setting. For more information, see `scripts/run_generative_v2.py`. To add a custom prompt for your model, feel free to open a PR.
-```
-python scripts/run_generative_v2.py --model={yourmodel}
+**Key Differences:**
+- **Package install**: Use when you just want to run evaluations
+- **Editable install**: Use when developing/modifying RewardBench code
+- **uv**: Faster, more reliable than pip (recommended)
+- **pip**: Traditional package manager (also works)
+### Running Evaluations
+
+**RewardBench 2 (Latest):**
+
+For reference configs, see [eval configs](https://github.com/allenai/reward-bench/blob/main/scripts/configs/eval_configs.yaml) in `scripts/configs/eval_configs.yaml`.
+
+```bash
+# Basic usage
+python scripts/run_v2.py --model=your-model
+
+# With performance tuning
+python scripts/run_v2.py \
+    --model=your-model \
+    --batch_size=128 \
+    --torch_dtype=bfloat16 \
+    --num_proc=8 \
+    --dataloader_num_workers=4
+
+# From editable install
+uv run python scripts/run_v2.py --model=your-model
 ```
 
-Or, to run RewardBench instead, run the following:
-```
-rewardbench --model={yourmodel} --dataset={yourdataset} --batch_size=8
-```
-For a DPO model, pass --ref_model={} and the script will automatically route there.
-Automatically uses Tokenizers chat templates, but can also use fastchat conv templates.
+**Generative Models (LLM-as-judge):**
 
-To run the core Reward Bench evaluation set, run:
-```
-rewardbench --model={yourmodel}
+Rankings-based (default, compares 4 responses):
+```bash
+python scripts/run_generative_v2.py --model=your-model
 ```
 
-Examples:
-1. Normal operation
+Ratings-based (scores each response separately):
+```bash
+python scripts/run_generative_v2.py --model=your-model --score_w_ratings
 ```
-rewardbench --model=OpenAssistant/reward-model-deberta-v3-large-v2 --dataset=allenai/ultrafeedback_binarized_cleaned --split=test_gen --chat_template=raw
+
+Note: The Ties subset (20+ completions per prompt) automatically uses ratings mode.
+
+**RewardBench V1 (Core Evaluation Set):**
+
+```bash
+# Using the CLI
+rewardbench --model=your-model
+
+# With custom dataset
+rewardbench --model=your-model --dataset=your-dataset --batch_size=8
+
+# DPO models (pass reference model)
+rewardbench --model=your-dpo-model --ref_model=base-model
+
+# From editable install
+uv run rewardbench --model=your-model
 ```
-2. DPO model from local dataset (note `--load_json`)
+
+### Configuration & Performance
+
+**Default Settings (Optimized for Modern GPUs):**
+- **dtype**: `bfloat16` (better stability than float16)
+- **num_proc**: `8` (dataset operations parallelism)
+- **dataloader_num_workers**: `4` (PyTorch DataLoader workers)
+
+**Performance Tuning:**
+```bash
+# High-performance system (16+ cores, A100/H100)
+python scripts/run_v2.py \
+    --model=your-model \
+    --batch_size=128 \
+    --num_proc=16 \
+    --dataloader_num_workers=8
+
+# Debugging (single-threaded)
+python scripts/run_v2.py \
+    --model=your-model \
+    --batch_size=32 \
+    --num_proc=1 \
+    --dataloader_num_workers=0
+
+# Older GPUs (use float16 instead of bfloat16)
+python scripts/run_v2.py \
+    --model=your-model \
+    --torch_dtype=float16
 ```
-rewardbench --model=Qwen/Qwen1.5-0.5B-Chat --ref_model=Qwen/Qwen1.5-0.5B --dataset=/net/nfs.cirrascale/allennlp/jacobm/herm/data/berkeley-nectar-binarized-preferences-random-rejected.jsonl --load_json
+
+**Examples:**
+
+1. Normal operation with custom dataset:
+```bash
+rewardbench \
+    --model=OpenAssistant/reward-model-deberta-v3-large-v2 \
+    --dataset=allenai/ultrafeedback_binarized_cleaned \
+    --split=test_gen \
+    --chat_template=raw
+```
+
+2. DPO model from local JSON dataset:
+```bash
+rewardbench \
+    --model=Qwen/Qwen1.5-0.5B-Chat \
+    --ref_model=Qwen/Qwen1.5-0.5B \
+    --dataset=/path/to/dataset.jsonl \
+    --load_json
+```
+
+3. Local model with custom settings:
+```bash
+python scripts/run_v2.py \
+    --model=/path/to/local/model \
+    --batch_size=128 \
+    --trust_remote_code
 ```
 
 **Generative RMs** can be run after installing with `[generative]` extra (see Installation above):
@@ -135,18 +230,63 @@ rewardbench --model Qwen/Qwen1.5-0.5B-Chat --ref_model Qwen/Qwen1.5-0.5B  --batc
 ```
 Open an issue if you would like complete functionality.
 
-## Full Installation
-To install from source, please install `torch` on your system, and then install the following requirements.
+## Full Installation from Source
+
+**Prerequisites:**
+- Python 3.10+ (3.10, 3.11, 3.12 supported)
+- PyTorch 2.0+ (will be installed automatically)
+- CUDA toolkit (for GPU support)
+
+**Recommended: UV (Fast and Reliable):**
+```bash
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and install
+git clone https://github.com/allenai/reward-bench.git
+cd reward-bench
+
+# Editable install (changes to code take effect immediately)
+uv sync                      # Base: reward models only
+uv sync --extra api          # + API models (OpenAI, Anthropic, etc.)
+uv sync --extra vllm         # + vLLM for local LLM inference (Linux+CUDA only)
+uv sync --extra generative   # + Both API and vLLM
+uv sync --extra dev          # + Development tools (black, pytest, etc.)
+
+# Set HuggingFace token
+export HF_TOKEN="your_token_here"
+# Or add to ~/.bashrc for persistence
+echo 'export HF_TOKEN="your_token_here"' >> ~/.bashrc
 ```
-pip install -e .
+
+**Traditional: pip (Also Works):**
+```bash
+# Clone repository
+git clone https://github.com/allenai/reward-bench.git
+cd reward-bench
+
+# Editable install
+pip install -e .                    # Base
+pip install -e ".[generative]"      # With generative support
+pip install -e ".[dev]"             # With dev tools
+
+# Set HuggingFace token
+export HF_TOKEN="your_token_here"
 ```
-Optinally, for generative scripts, run:
-```
-pip install -e ".[generative]"
-```
-Add the following to your `.bashrc`:
-```
-export HF_TOKEN="{your_token}"
+
+**Key Versions (for reference):**
+- transformers: 5.6.2 (pinned for stability)
+- vLLM: 0.18+ (Linux + CUDA only)
+- torch: 2.11+ (auto-detected for your platform)
+
+**Verify Installation:**
+```bash
+# Check it works
+uv run rewardbench --help
+uv run python scripts/run_v2.py --help
+
+# Test with a small model
+uv run rewardbench --model=natolambert/gpt2-dummy-rm --debug
 ```
 
 ## Training
@@ -168,12 +308,29 @@ The core scripts automatically evaluate our core evaluation set. To run these on
 
 ## Running Reward Models
 
-To run individual models with `scripts/run_rm.py`, use any of the following examples:
-```
+**Basic Usage:**
+```bash
+# Standard reward models
 python scripts/run_rm.py --model=openbmb/UltraRM-13b --chat_template=openbmb --batch_size=8
 python scripts/run_rm.py --model=OpenAssistant/oasst-rm-2.1-pythia-1.4b-epoch-2.5 --chat_template=oasst_pythia
-python scripts/run_rm.py --model=PKU-Alignment/beaver-7b-v1.0-cost --chat_template=pku-align --batch_size=16
-python scripts/run_rm.py --model=IDEA-CCNL/Ziya-LLaMA-7B-Reward --batch_size=32 --trust_remote_code --chat_template=Ziya
+
+# With custom settings
+python scripts/run_rm.py \
+    --model=PKU-Alignment/beaver-7b-v1.0-cost \
+    --chat_template=pku-align \
+    --batch_size=16 \
+    --num_proc=8 \
+    --dataloader_num_workers=4
+
+# Models requiring trust_remote_code
+python scripts/run_rm.py \
+    --model=IDEA-CCNL/Ziya-LLaMA-7B-Reward \
+    --batch_size=32 \
+    --trust_remote_code \
+    --chat_template=Ziya
+
+# From editable install
+uv run python scripts/run_rm.py --model=your-model
 ```
 
 To run these models with AI2 infrastructure, run:

@@ -36,6 +36,12 @@ uv run rewardbench --help
 - All scripts default to `bfloat16` for better numerical stability and modern GPU compatibility
 - Override with `--torch_dtype` if needed: `--torch_dtype=float16` for older GPUs
 
+**Parallelism Configuration**
+- `--num_proc=8`: Number of processes for dataset operations (map, filter)
+- `--dataloader_num_workers=4`: Number of worker processes for PyTorch DataLoader
+- Set to 0 to disable parallelism for debugging
+- Recommended: Use 4-8 workers on multi-core systems for optimal performance
+
 ## Version Pinning Policy
 
 **Always pin `transformers` and `vllm` versions** to avoid dependency headaches. These packages have frequent breaking changes and complex dependency trees.

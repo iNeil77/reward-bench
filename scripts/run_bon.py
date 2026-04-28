@@ -64,6 +64,9 @@ def get_args():
     parser.add_argument(
         "--debug", action="store_true", help="run on common preference sets instead of our custom eval set"
     )
+    parser.add_argument(
+        "--dataloader_num_workers", type=int, default=4, help="Number of worker processes for DataLoader (default: 4)"
+    )
     args = parser.parse_args()
     return args
 
@@ -235,6 +238,8 @@ def main():
             collate_fn=custom_collate_fn,  # if not args.pref_sets else None,
             shuffle=False,
             drop_last=False,
+            num_workers=args.dataloader_num_workers,
+            pin_memory=torch.cuda.is_available(),
         )
 
         model = accelerator.prepare(reward_pipe.model)

@@ -16,6 +16,7 @@ import argparse
 import logging
 import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
 import torch
@@ -82,6 +83,9 @@ def get_args():
     )
     parser.add_argument(
         "--num_proc", type=int, default=8, help="Number of processes for dataset operations (default: 8)"
+    )
+    parser.add_argument(
+        "--dataloader_num_workers", type=int, default=4, help="Number of worker processes for DataLoader (default: 4)"
     )
     args = parser.parse_args()
     args.torch_dtype = torch_dtype_mapping(args.torch_dtype)
@@ -253,6 +257,8 @@ def main():
         # collate_fn = lambda x: x, # fix weird batching error
         shuffle=False,
         drop_last=False,
+        num_workers=args.dataloader_num_workers,
+        pin_memory=torch.cuda.is_available(),
     )
     results = []
     scores_chosen = []
@@ -303,14 +309,31 @@ def main():
     else:
         save_modifier = ""
     results_grouped["chat_template"] = args.chat_template if not hasattr(tokenizer, "chat_template") else "tokenizer"
-    # print per subset and log into results_grouped file
+
+    # Helper function for parallel subset processing
+    def calculate_subset_score(subset_data):
+        subset, dataset = subset_data
+        subset_dataset = dataset.filter(lambda example: example["subset"] == subset, num_proc=1)
+        results_array = np.array(subset_dataset["results"])
+        num_correct = int(np.sum(results_array))
+        num_total = len(results_array)
+        score = num_correct / num_total if num_total > 0 else 0
+        return subset, num_correct, num_total, score
+
+    # Process subsets in parallel
     present_subsets = np.unique(subsets)
-    for subset in present_subsets:
-        subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset, num_proc=args.num_proc)
-        num_correct = sum(subset_dataset["results"])
-        num_total = len(subset_dataset["results"])
-        print(f"{subset}: {num_correct}/{num_total} ({num_correct/num_total})")
-        results_grouped[subset] = num_correct / num_total
+    max_workers = min(len(present_subsets), args.num_proc)
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        future_to_subset = {
+            executor.submit(calculate_subset_score, (subset, out_dataset)): subset
+            for subset in present_subsets
+        }
+
+        for future in as_completed(future_to_subset):
+            subset, num_correct, num_total, score = future.result()
+            print(f"{subset}: {num_correct}/{num_total} ({score})")
+            results_grouped[subset] = score
 
     # log leaderboard aggregated results
     if not args.pref_sets:

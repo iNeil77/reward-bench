@@ -18,6 +18,7 @@ import argparse
 import logging
 import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
 import torch
@@ -98,6 +99,9 @@ def get_args():
     )
     parser.add_argument(
         "--num_proc", type=int, default=8, help="Number of processes for dataset operations (default: 8)"
+    )
+    parser.add_argument(
+        "--dataloader_num_workers", type=int, default=4, help="Number of worker processes for DataLoader (default: 4)"
     )
     args = parser.parse_args()
     return args
@@ -318,6 +322,8 @@ def main():
         collate_fn=custom_collate_fn,
         shuffle=False,
         drop_last=False,
+        num_workers=args.dataloader_num_workers,
+        pin_memory=torch.cuda.is_available(),
     )
 
     model = accelerator.prepare(reward_pipe.model)
@@ -365,29 +371,51 @@ def main():
     chat_template = args.chat_template if not check_tokenizer_chat_template(tokenizer) else "tokenizer"
     results_grouped["chat_template"] = chat_template
 
-    # print per subset and log into results_grouped file
-    present_subsets = np.unique(subsets)
-    for subset in present_subsets:
-        subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset, num_proc=args.num_proc)
-        # recompute "results" column for ties subset with different scoring method
+    # Helper function for parallel subset processing
+    def calculate_subset_score(subset_data):
+        subset, dataset = subset_data
+        subset_dataset = dataset.filter(lambda example: example["subset"] == subset, num_proc=1)
+
         if subset.lower() == "ties":
             ties_subset_with_results, overall_score = process_single_model(subset_dataset)
-            subset_dataset = ties_subset_with_results
-
-            # Update the results for the ties subset in the original dataset
-            ties_indices = [i for i, s in enumerate(out_dataset["subset"]) if s == "ties"]
-            out_dataset_df = out_dataset.to_pandas()
-            for i, ties_idx in enumerate(ties_indices):
-                out_dataset_df.at[ties_idx, "results"] = ties_subset_with_results["results"][i]
-            out_dataset = Dataset.from_pandas(out_dataset_df)
-
-            print(f"{subset}: Overall score {overall_score}")
-            results_grouped[subset] = overall_score
+            return subset, overall_score, ties_subset_with_results
         else:
-            num_correct = sum(subset_dataset["results"])
-            num_total = len(subset_dataset["results"])
-            print(f"{subset}: {num_correct}/{num_total} ({num_correct/num_total})")
-            results_grouped[subset] = num_correct / num_total
+            results_array = np.array(subset_dataset["results"])
+            num_correct = np.sum(results_array)
+            num_total = len(results_array)
+            score = num_correct / num_total if num_total > 0 else 0
+            return subset, score, None
+
+    # Process subsets in parallel
+    present_subsets = np.unique(subsets)
+
+    # Use ProcessPoolExecutor for parallel subset processing
+    max_workers = min(len(present_subsets), args.num_proc)
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        future_to_subset = {
+            executor.submit(calculate_subset_score, (subset, out_dataset)): subset
+            for subset in present_subsets
+        }
+
+        for future in as_completed(future_to_subset):
+            subset, score, ties_results = future.result()
+
+            # Update results for ties subset if needed
+            if ties_results is not None:
+                ties_indices = [i for i, s in enumerate(out_dataset["subset"]) if s == "ties"]
+                out_dataset_df = out_dataset.to_pandas()
+                for i, ties_idx in enumerate(ties_indices):
+                    out_dataset_df.at[ties_idx, "results"] = ties_results["results"][i]
+                out_dataset = Dataset.from_pandas(out_dataset_df)
+                print(f"{subset}: Overall score {score}")
+            else:
+                # Reconstruct num_correct and num_total for display
+                subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset, num_proc=1)
+                num_correct = int(score * len(subset_dataset["results"]))
+                num_total = len(subset_dataset["results"])
+                print(f"{subset}: {num_correct}/{num_total} ({score})")
+
+            results_grouped[subset] = score
 
     ############################
     # Upload results to hub

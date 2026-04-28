@@ -16,6 +16,7 @@ import argparse
 import logging
 import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
 import torch
@@ -91,6 +92,9 @@ def get_args():
     )
     parser.add_argument(
         "--num_proc", type=int, default=8, help="Number of processes for dataset operations (default: 8)"
+    )
+    parser.add_argument(
+        "--dataloader_num_workers", type=int, default=4, help="Number of worker processes for DataLoader (default: 4)"
     )
     args = parser.parse_args()
     args.torch_dtype = torch_dtype_mapping(args.torch_dtype)
@@ -299,6 +303,8 @@ def main():
             collate_fn=custom_collate_fn,  # if not args.pref_sets else None,
             shuffle=False,
             drop_last=False,
+            num_workers=args.dataloader_num_workers,
+            pin_memory=torch.cuda.is_available(),
         )
 
         dataloader, model = accelerator.prepare(dataloader, reward_pipe.model)
@@ -314,7 +320,9 @@ def main():
                 text_rejected = [b["text_rejected"] for b in batch]
                 text_chosen = [b["text_chosen"] for b in batch]
                 results_sub = reward_pipe(text_chosen, text_rejected, **reward_pipeline_kwargs)
-                [results.append(1) if result else results.append(0) for result in results_sub.cpu().numpy().tolist()]
+                # Vectorized result aggregation
+                batch_results = results_sub.cpu().numpy().astype(int).tolist()
+                results.extend(batch_results)
                 scores_chosen.extend([None] * len(results_sub))
                 scores_rejected.extend([None] * len(results_sub))
             else:
@@ -334,11 +342,11 @@ def main():
                     )  # cast to float in case of bfloat16
                     score_rejected_batch = rewards_rejected.float().cpu().numpy().tolist()
 
-                # log results
-                [
-                    results.append(1) if chosen > rejected else results.append(0)
-                    for chosen, rejected in zip(score_chosen_batch, score_rejected_batch)
-                ]
+                # log results (vectorized for performance)
+                batch_results = (
+                    np.array(score_chosen_batch) > np.array(score_rejected_batch)
+                ).astype(int).tolist()
+                results.extend(batch_results)
                 scores_chosen.extend(score_chosen_batch)
                 scores_rejected.extend(score_rejected_batch)
 
@@ -364,14 +372,30 @@ def main():
         args.chat_template if not check_tokenizer_chat_template(tokenizer) else "tokenizer"
     )
 
-    # print per subset and log into results_grouped file
+    # Helper function for parallel subset processing
+    def calculate_subset_score(subset_data):
+        subset, dataset = subset_data
+        subset_dataset = dataset.filter(lambda example: example["subset"] == subset, num_proc=1)
+        results_array = np.array(subset_dataset["results"])
+        num_correct = int(np.sum(results_array))
+        num_total = len(results_array)
+        score = num_correct / num_total if num_total > 0 else 0
+        return subset, num_correct, num_total, score
+
+    # Process subsets in parallel
     present_subsets = np.unique(subsets)
-    for subset in present_subsets:
-        subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset, num_proc=args.num_proc)
-        num_correct = sum(subset_dataset["results"])
-        num_total = len(subset_dataset["results"])
-        print(f"{subset}: {num_correct}/{num_total} ({num_correct/num_total})")
-        results_grouped[subset] = num_correct / num_total
+    max_workers = min(len(present_subsets), args.num_proc)
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        future_to_subset = {
+            executor.submit(calculate_subset_score, (subset, out_dataset)): subset
+            for subset in present_subsets
+        }
+
+        for future in as_completed(future_to_subset):
+            subset, num_correct, num_total, score = future.result()
+            print(f"{subset}: {num_correct}/{num_total} ({score})")
+            results_grouped[subset] = score
 
     # log leaderboard aggregated results
     if not args.pref_sets:
