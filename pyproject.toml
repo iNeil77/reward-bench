@@ -38,6 +38,7 @@ dependencies = [
     "accelerate",
     "bitsandbytes",
     "datasets",
+    "flash-attn>=2.7.2",
     "huggingface_hub",
     "hf_transfer",
     "pandas",

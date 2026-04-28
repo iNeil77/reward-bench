@@ -901,6 +901,18 @@ wheels = [
 ]
 
 [[package]]
+name = "flash-attn"
+version = "2.8.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "einops" },
+    { name = "torch", version = "2.9.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
+    { name = "torch", version = "2.9.1+cu130", source = { registry = "https://download.pytorch.org/whl/cu130" }, marker = "platform_machine == 'aarch64' and sys_platform == 'linux'" },
+    { name = "torch", version = "2.11.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'aarch64' and sys_platform == 'linux'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3b/b2/8d76c41ad7974ee264754709c22963447f7f8134613fd9ce80984ed0dab7/flash_attn-2.8.3.tar.gz", hash = "sha256:1e71dd64a9e0280e0447b8a0c2541bad4bf6ac65bdeaa2f90e51a9e57de0370d", size = 8447812, upload-time = "2025-08-15T08:28:12.911Z" }
+
+[[package]]
 name = "flashinfer-cubin"
 version = "0.6.8.post1"
 source = { registry = "https://pypi.org/simple" }
@@ -3814,6 +3826,7 @@ dependencies = [
     { name = "accelerate" },
     { name = "bitsandbytes" },
     { name = "datasets" },
+    { name = "flash-attn" },
     { name = "hf-transfer" },
     { name = "huggingface-hub" },
     { name = "pandas" },
@@ -3882,6 +3895,7 @@ requires-dist = [
     { name = "black", marker = "extra == 'dev'" },
     { name = "datasets" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=6.0" },
+    { name = "flash-attn", specifier = ">=2.7.2" },
     { name = "fschat", marker = "extra == 'v1'" },
     { name = "google-genai", marker = "extra == 'api'" },
     { name = "google-generativeai", marker = "extra == 'api'" },

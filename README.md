@@ -277,6 +277,7 @@ export HF_TOKEN="your_token_here"
 
 **Key Versions (for reference):**
 - transformers: 5.6.2 (pinned for stability)
+- flash-attn: 2.7.2+ (currently 2.8.3, for fast attention)
 - vLLM: 0.18+ (Linux + CUDA only)
 - torch: 2.11+ (auto-detected for your platform)
 

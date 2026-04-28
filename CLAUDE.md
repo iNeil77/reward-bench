@@ -54,6 +54,7 @@ uv run rewardbench --help
 
 Current pinned versions:
 - `transformers==5.6.2`
+- `flash-attn>=2.7.2` (currently resolves to 2.8.3)
 - `vllm>=0.18.0` (in `[vllm]` extra, currently resolves to 0.20.0)
 
 When updating these versions:
