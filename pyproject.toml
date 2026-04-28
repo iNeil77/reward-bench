@@ -59,9 +59,10 @@ dev = [
     "isort>=5.12.0",
     "pytest",
 ]
-# Flash Attention 2 for faster inference (requires compilation or prebuilt wheels)
+# Flash Attention 2 for maximum inference speed
+# Note: Requires CUDA toolkit matching your PyTorch version
 flash-attn = [
-    "flash-attn>=2.7.2",
+    "flash-attn==2.8.3",
 ]
 # API-based LLM judges (fast install, no GPU required)
 api = [
@@ -129,6 +130,15 @@ explicit = true
 name = "vllm-cu130"
 url = "https://wheels.vllm.ai/nightly/cu130"
 explicit = true
+
+[tool.uv]
+# flash-attn: build without isolation so torch is available during compilation
+# This allows faster builds and proper CUDA detection
+no-build-isolation-package = ["flash-attn"]
+
+[tool.uv.extra-build-dependencies]
+# Ensure torch is available as a build dependency
+flash-attn = ["torch", "packaging", "ninja"]
 
 [tool.black]
 line-length = 119

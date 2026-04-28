@@ -48,9 +48,11 @@ It also will detect if a instruction dataset is passed (by checking for not havi
 
 **Method 1: Package Install with UV (recommended for users):**
 ```bash
+# Base install (uses SDPA attention, good performance)
 uv pip install rewardbench
 
-# For Flash Attention 2 (optional, faster inference but requires compilation)
+# With Flash Attention 2 for maximum speed (requires CUDA toolkit)
+pip install ninja  # optional: speeds up flash-attn build
 uv pip install rewardbench[flash-attn]
 
 # For generative models (LLM-as-judge, vLLM, API providers)
@@ -59,9 +61,11 @@ uv pip install rewardbench[generative]
 
 **Method 2: Package Install with pip:**
 ```bash
+# Base install
 pip install rewardbench
 
-# For Flash Attention 2 (optional, recommended)
+# With Flash Attention 2 (optional, requires matching CUDA/PyTorch versions)
+pip install ninja  # optional: speeds up compilation
 pip install rewardbench[flash-attn]
 
 # For generative models
@@ -150,15 +154,17 @@ uv run rewardbench --model=your-model
 
 **Default Settings (Optimized for Modern GPUs):**
 - **dtype**: `bfloat16` (better stability than float16)
-- **attn_implementation**: `flash_attention_2` (falls back to SDPA if flash-attn not installed)
+- **attn_implementation**: `flash_attention_2` (auto-falls back to SDPA if not installed)
 - **num_proc**: `8` (dataset operations parallelism)
 - **dataloader_num_workers**: `4` (PyTorch DataLoader workers)
 
-**Note on Flash Attention:**
-- Flash Attention 2 provides 2-4x faster inference but requires compilation (30+ minutes)
-- Install with: `pip install flash-attn>=2.7.2` or `uv sync --extra flash-attn`
-- If not installed, transformers automatically falls back to SDPA (still fast on modern GPUs)
-- Override with `--attn_implementation=sdpa` or `--attn_implementation=eager` if needed
+**Note on Flash Attention 2:**
+- Provides 2-4x faster inference on Ampere+ GPUs (A100, H100, RTX 30/40 series)
+- **Optional extra**: Install with `pip install rewardbench[flash-attn]`
+- **Requires**: CUDA toolkit matching your PyTorch CUDA version
+- **Build time**: 5-10 min with ninja, 30-45 min without
+- **Automatic fallback**: Uses SDPA if flash-attn not available (still fast)
+- Override with `--attn_implementation=sdpa` or `--attn_implementation=eager`
 
 **Performance Tuning:**
 ```bash

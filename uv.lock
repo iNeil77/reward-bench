@@ -3897,7 +3897,7 @@ requires-dist = [
     { name = "black", marker = "extra == 'dev'" },
     { name = "datasets" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=6.0" },
-    { name = "flash-attn", marker = "extra == 'flash-attn'", specifier = ">=2.7.2" },
+    { name = "flash-attn", marker = "extra == 'flash-attn'", specifier = "==2.8.3" },
     { name = "fschat", marker = "extra == 'v1'" },
     { name = "google-genai", marker = "extra == 'api'" },
     { name = "google-generativeai", marker = "extra == 'api'" },
