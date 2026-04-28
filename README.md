@@ -35,6 +35,7 @@
 - [Usage](#usage)
   - [RewardBench CLI](#rewardbench-cli)
   - [RewardBench 2 (Scripts)](#rewardbench-2-scripts)
+  - [RM-Bench (Scripts)](#rm-bench-scripts)
   - [Generative Models (LLM-as-judge)](#generative-models-llm-as-judge)
   - [DPO Models](#dpo-models)
 - [Configuration & Performance](#configuration--performance)
@@ -63,6 +64,7 @@
 - `rewardbench` CLI: Quick evaluation on core dataset
 - `scripts/run_v2.py`: RewardBench 2 with best-of-4 and Ties data
 - `scripts/run_rm.py`: Advanced reward model evaluation
+- `scripts/run_rm_bench.py`: RM-Bench (style-robustness) evaluation
 - `scripts/run_dpo.py`: DPO model evaluation
 - `scripts/run_generative_v2.py`: LLM-as-judge evaluation
 
@@ -233,6 +235,36 @@ python scripts/run_rm.py \
 
 **Config reference:**
 See [eval_configs.yaml](scripts/configs/eval_configs.yaml) for model-specific configurations.
+
+### RM-Bench (Scripts)
+
+[RM-Bench](https://github.com/THU-KEG/RM-Bench) evaluates reward models for style robustness. Each prompt has 3 chosen and 3 rejected responses across stylistic variants (concise, detailed_plain, detailed_markdown); scoring produces a 3x3 chosen-vs-rejected matrix that yields hard/normal/easy accuracy per domain (chat, math, code, safety).
+
+The dataset JSON files are bundled under [`data/rm-bench/`](data/rm-bench/), so evaluation works out of the box.
+
+```bash
+# Full eval on all domains
+uv run python scripts/run_rm_bench.py \
+    --model=your-model \
+    --datapath=data/rm-bench/total_dataset.json \
+    --batch_size=8
+
+# Single domain (chat / code / math / safety-refuse / safety-response)
+uv run python scripts/run_rm_bench.py \
+    --model=your-model \
+    --datapath=data/rm-bench/code_filtered.json \
+    --batch_size=16
+
+# Quick smoke test (10 examples per style variant)
+uv run python scripts/run_rm_bench.py \
+    --model=your-model \
+    --datapath=data/rm-bench/total_dataset.json \
+    --debug
+```
+
+**Outputs:**
+- `results/rm-bench/<model>/<dataset>_<model>_<timestamp>.json`: per-example scores (3 chosen, 3 rejected per row)
+- `results/rm-bench/<model>/<dataset>_<model>_<timestamp>_metrics.json`: aggregate hard/normal/easy accuracy per domain plus `total_avg_acc`
 
 ### Generative Models (LLM-as-judge)
 
@@ -462,12 +494,14 @@ For training reward models, use [`open-instruct`](https://github.com/allenai/ope
 ```
 ├── README.md                   <- This file
 ├── analysis/                   <- Analysis tools
+├── data/rm-bench/              <- Bundled RM-Bench JSON eval files
 ├── rewardbench/                <- Core utils and models
 │   ├── models/                 <- Model implementations
 │   └── *.py                    <- Utilities
 ├── scripts/                    <- Evaluation scripts
 │   ├── run_v2.py              <- RewardBench 2
 │   ├── run_rm.py              <- Reward models
+│   ├── run_rm_bench.py        <- RM-Bench (style robustness)
 │   ├── run_dpo.py             <- DPO models
 │   └── configs/               <- Model configs
 ├── tests/                      <- Unit tests
