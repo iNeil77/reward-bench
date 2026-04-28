@@ -17,9 +17,32 @@ uv sync --extra vllm
 # Install everything (api + vllm)
 uv sync --extra generative
 
-# Run commands
-uv run python scripts/run_rm.py
-uv run rewardbench --help
+# Run the CLI binary
+uv run rewardbench --model=your-model
+
+# Run scripts
+uv run python scripts/run_v2.py --model=your-model
+uv run python scripts/run_rm.py --model=your-model
+
+# One-off usage without install (uv handles dependencies automatically)
+uv run --with rewardbench rewardbench --model=your-model
+```
+
+## Entry Points
+
+- **`rewardbench`**: Main CLI for RewardBench v1 core evaluation set
+  - Use: `uv run rewardbench --model=your-model`
+  - Best for: Standard reward model evaluation
+  
+- **`rewardbench-gen`**: CLI for generative reward models (LLM-as-judge)
+  - Use: `uv run rewardbench-gen --model=your-model`
+  - Requires: `[api]` or `[generative]` extra
+  
+- **Scripts**: For advanced usage and RewardBench 2
+  - `scripts/run_v2.py`: RewardBench 2 with best-of-N and Ties
+  - `scripts/run_rm.py`: More control over reward model evaluation
+  - `scripts/run_dpo.py`: DPO-specific evaluation
+  - `scripts/run_generative_v2.py`: Generative models for RewardBench 2
 ```
 
 ## Optional Extras

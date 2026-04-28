@@ -98,6 +98,38 @@ uv run rewardbench --model=your-model
 - **Editable install**: Use when developing/modifying RewardBench code
 - **uv**: Faster, more reliable than pip (recommended)
 - **pip**: Traditional package manager (also works)
+
+### Using the `rewardbench` CLI
+
+The `rewardbench` binary is the main CLI for running reward model evaluations:
+
+```bash
+# Basic usage (after installation)
+rewardbench --model=your-model
+
+# With uv (from editable install)
+uv run rewardbench --model=your-model
+
+# With uv (one-off, no install required)
+uv run --with rewardbench rewardbench --model=your-model
+
+# Full example with options
+rewardbench \
+    --model=OpenAssistant/reward-model-deberta-v3-large-v2 \
+    --batch_size=32 \
+    --attn_implementation=sdpa \
+    --num_proc=16
+
+# DPO model
+rewardbench \
+    --model=your-dpo-model \
+    --ref_model=base-model \
+    --batch_size=64
+
+# Get all options
+rewardbench --help
+```
+
 ### Running Evaluations
 
 **RewardBench 2 (Latest):**
@@ -143,7 +175,7 @@ Note: The Ties subset (20+ completions per prompt) automatically uses ratings mo
 **RewardBench V1 (Core Evaluation Set):**
 
 ```bash
-# Using the CLI
+# Using the CLI binary
 rewardbench --model=your-model
 
 # With custom dataset
@@ -152,9 +184,18 @@ rewardbench --model=your-model --dataset=your-dataset --batch_size=8
 # DPO models (pass reference model)
 rewardbench --model=your-dpo-model --ref_model=base-model
 
-# From editable install
+# From editable install with uv
 uv run rewardbench --model=your-model
+
+# With uv (package install)
+uv run --with rewardbench rewardbench --model=your-model
 ```
+
+**CLI vs Scripts:**
+- `rewardbench`: CLI for RewardBench v1 core set
+- `scripts/run_v2.py`: RewardBench 2 with best-of-N and Ties
+- `scripts/run_rm.py`: More control over reward model eval
+- `scripts/run_dpo.py`: Specifically for DPO models
 
 ### Configuration & Performance
 
@@ -208,8 +249,13 @@ python scripts/run_v2.py \
 rewardbench \
     --model=OpenAssistant/reward-model-deberta-v3-large-v2 \
     --dataset=allenai/ultrafeedback_binarized_cleaned \
-    --split=test_gen \
-    --chat_template=raw
+    --split=test_gen
+
+# Or with uv
+uv run rewardbench \
+    --model=OpenAssistant/reward-model-deberta-v3-large-v2 \
+    --dataset=allenai/ultrafeedback_binarized_cleaned \
+    --split=test_gen
 ```
 
 2. DPO model from local JSON dataset:
@@ -219,11 +265,24 @@ rewardbench \
     --ref_model=Qwen/Qwen1.5-0.5B \
     --dataset=/path/to/dataset.jsonl \
     --load_json
+
+# Or with uv (one-off without install)
+uv run --with rewardbench rewardbench \
+    --model=Qwen/Qwen1.5-0.5B-Chat \
+    --ref_model=Qwen/Qwen1.5-0.5B \
+    --dataset=/path/to/dataset.jsonl \
+    --load_json
 ```
 
 3. Local model with custom settings:
 ```bash
 python scripts/run_v2.py \
+    --model=/path/to/local/model \
+    --batch_size=128 \
+    --trust_remote_code
+
+# Or with uv
+uv run python scripts/run_v2.py \
     --model=/path/to/local/model \
     --batch_size=128 \
     --trust_remote_code
