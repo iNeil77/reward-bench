@@ -23,9 +23,14 @@ import torch
 import transformers
 from accelerate import Accelerator
 from accelerate.logging import get_logger
-from fastchat.conversation import get_conv_template
 from tqdm import tqdm
 from transformers import AutoTokenizer, BitsAndBytesConfig, pipeline
+
+# fschat is optional - only needed if --chat_template is specified
+try:
+    from fastchat.conversation import get_conv_template
+except ImportError:
+    get_conv_template = None
 
 # Enable faster downloads with hf_transfer (if available)
 os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
@@ -60,7 +65,12 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True, help="path to model")
     parser.add_argument("--tokenizer", type=str, default=None, help="path to non-matching tokenizer to model")
-    parser.add_argument("--chat_template", type=str, default="tulu", help="path to chat template")
+    parser.add_argument(
+        "--chat_template",
+        type=str,
+        default=None,
+        help="fastchat chat template (optional, uses tokenizer template if not specified)",
+    )
     parser.add_argument(
         "--trust_remote_code", action="store_true", default=False, help="directly load model instead of pipeline"
     )
@@ -127,7 +137,16 @@ def main():
 
     # load chat template
     chat_template = args.chat_template
-    conv = get_conv_template(chat_template)
+    if chat_template is not None:
+        if get_conv_template is None:
+            raise ImportError(
+                "--chat_template requires fschat, which is unmaintained. "
+                "Consider using the model's built-in tokenizer chat template instead (omit --chat_template). "
+                "If you need legacy templates, install with: pip install rewardbench[v1]"
+            )
+        conv = get_conv_template(chat_template)
+    else:
+        conv = None  # will use tokenizer's chat template
 
     if args.model in REWARD_MODEL_CONFIG:
         config = REWARD_MODEL_CONFIG[args.model]
