@@ -26,115 +26,186 @@
   </a>
 </p>
 
+---
+
+## Table of Contents
+- [Overview](#overview)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+  - [RewardBench CLI](#rewardbench-cli)
+  - [RewardBench 2 (Scripts)](#rewardbench-2-scripts)
+  - [Generative Models (LLM-as-judge)](#generative-models-llm-as-judge)
+  - [DPO Models](#dpo-models)
+- [Configuration & Performance](#configuration--performance)
+- [Advanced Usage](#advanced-usage)
+  - [Custom Datasets](#custom-datasets)
+  - [Result Uploading](#result-uploading)
+  - [Ensembling Models](#ensembling-models)
+  - [Best-of-N Rankings](#best-of-n-rankings)
+- [Development](#development)
+- [Docker & Maintenance](#docker--maintenance)
+- [Citation](#citation)
 
 ---
 
+## Overview
+
 **RewardBench** is a benchmark designed to evaluate the capabilities and safety of reward models (including those trained with Direct Preference Optimization, DPO).
-The repository includes the following:
-* Common inference code for a variety of reward models (Starling, PairRM, OpenAssistant, DPO, and more).
-* Common dataset formatting and tests for fair reward model inference.
-* Analysis and visualization tools.
 
-The three primary scripts to generate results (more in `scripts/`):
-1. `scripts/run_rm.py`: Run evaluations for reward models.
-2. `scripts/run_dpo.py`: Run evaluations for direct preference optimization (DPO) models (and other models using implicit rewards, such as KTO).
-3. `scripts/run_v2.py`: Run evaluations for RewardBench 2, with special data handling for best-of-4 and Ties data.
+**Features:**
+- Common inference code for reward models (Starling, PairRM, OpenAssistant, DPO, and more)
+- Unified dataset formatting for fair evaluation
+- Analysis and visualization tools
+- Support for both traditional reward models and generative judges (LLM-as-judge)
 
-## Quick Usage
-RewardBench lets you quickly evaluate any reward model on any preference set.
-It also will detect if a instruction dataset is passed (by checking for not having `chosen`/`rejected`, and having `messages`) -- for these, just a model outputs are logged (not accuracy).
+**Key Components:**
+- `rewardbench` CLI: Quick evaluation on core dataset
+- `scripts/run_v2.py`: RewardBench 2 with best-of-4 and Ties data
+- `scripts/run_rm.py`: Advanced reward model evaluation
+- `scripts/run_dpo.py`: DPO model evaluation
+- `scripts/run_generative_v2.py`: LLM-as-judge evaluation
 
-### Installation
+---
 
-**Method 1: Package Install with UV (recommended for users):**
+## Installation
+
+### Quick Install
+
+**With UV (recommended):**
 ```bash
-# Base install (uses SDPA attention, good performance)
+# Base install (uses SDPA attention, excellent performance)
 uv pip install rewardbench
 
-# With Flash Attention 2 for maximum speed (requires CUDA toolkit)
-pip install ninja  # optional: speeds up flash-attn build
+# With Flash Attention 2 for maximum speed (optional, requires CUDA toolkit)
+pip install ninja  # speeds up compilation
 uv pip install rewardbench[flash-attn]
 
-# For generative models (LLM-as-judge, vLLM, API providers)
+# For LLM-as-judge (API providers + vLLM)
 uv pip install rewardbench[generative]
 ```
 
-**Method 2: Package Install with pip:**
+**With pip:**
 ```bash
-# Base install
 pip install rewardbench
-
-# With Flash Attention 2 (optional, requires matching CUDA/PyTorch versions)
-pip install ninja  # optional: speeds up compilation
-pip install rewardbench[flash-attn]
-
-# For generative models
-pip install rewardbench[generative]
+pip install rewardbench[flash-attn]    # optional: Flash Attention 2
+pip install rewardbench[generative]    # optional: generative models
 ```
 
-**Method 3: Editable Install for Development (recommended for contributors):**
+**One-off usage (no install):**
 ```bash
-# Clone the repository
+uv run --with rewardbench rewardbench --model=your-model
+```
+
+### Development Install
+
+```bash
+# Clone repository
 git clone https://github.com/allenai/reward-bench.git
 cd reward-bench
 
-# Install uv if you don't have it
+# Install uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install in editable mode (changes to code take effect immediately)
-uv sync                        # base install
-uv sync --extra flash-attn     # with Flash Attention 2 (optional, 30+ min build)
-uv sync --extra generative     # with generative support (API + vLLM)
-uv sync --extra api            # API-only (OpenAI, Anthropic, etc.)
-uv sync --extra dev            # development tools (black, pytest, etc.)
+# Install in editable mode
+uv sync                        # base
+uv sync --extra generative     # with generative support
+uv sync --extra dev            # with development tools
 
-# Run scripts directly
-uv run python scripts/run_v2.py --model=your-model
-uv run rewardbench --model=your-model
+# Set HuggingFace token
+export HF_TOKEN="your_token_here"
 ```
 
-**Key Differences:**
-- **Package install**: Use when you just want to run evaluations
-- **Editable install**: Use when developing/modifying RewardBench code
-- **uv**: Faster, more reliable than pip (recommended)
-- **pip**: Traditional package manager (also works)
+**Requirements:**
+- Python 3.10+ (3.10, 3.11, 3.12 supported)
+- PyTorch 2.0+ (auto-installed)
+- CUDA toolkit (for GPU support)
 
-### Using the `rewardbench` CLI
+**Key versions:**
+- transformers: 5.6.2
+- flash-attn: 2.8.3 (optional, in `[flash-attn]` extra)
+- vLLM: 0.18+ (optional, in `[generative]` extra)
 
-The `rewardbench` binary is the main CLI for running reward model evaluations:
+---
 
+## Quick Start
+
+**Evaluate a reward model:**
 ```bash
-# Basic usage (after installation)
+rewardbench --model=OpenAssistant/reward-model-deberta-v3-large-v2
+```
+
+**Evaluate on RewardBench 2:**
+```bash
+python scripts/run_v2.py --model=your-model --batch_size=64
+```
+
+**Evaluate DPO model:**
+```bash
+rewardbench --model=Qwen/Qwen1.5-0.5B-Chat --ref_model=Qwen/Qwen1.5-0.5B
+```
+
+**With uv (from editable install):**
+```bash
+uv run rewardbench --model=your-model
+uv run python scripts/run_v2.py --model=your-model
+```
+
+---
+
+## Usage
+
+### RewardBench CLI
+
+The `rewardbench` binary evaluates models on the RewardBench v1 core set.
+
+**Basic usage:**
+```bash
+# Standard evaluation
 rewardbench --model=your-model
 
-# With uv (from editable install)
-uv run rewardbench --model=your-model
-
-# With uv (one-off, no install required)
-uv run --with rewardbench rewardbench --model=your-model
-
-# Full example with options
+# With options
 rewardbench \
-    --model=OpenAssistant/reward-model-deberta-v3-large-v2 \
+    --model=your-model \
     --batch_size=32 \
-    --attn_implementation=sdpa \
-    --num_proc=16
+    --num_proc=16 \
+    --attn_implementation=sdpa
 
 # DPO model
 rewardbench \
     --model=your-dpo-model \
-    --ref_model=base-model \
-    --batch_size=64
+    --ref_model=base-model
 
-# Get all options
+# Custom dataset
+rewardbench \
+    --model=your-model \
+    --dataset=allenai/ultrafeedback_binarized_cleaned \
+    --split=test_gen
+
+# Local JSON dataset
+rewardbench \
+    --model=your-model \
+    --dataset=/path/to/dataset.jsonl \
+    --load_json
+```
+
+**With uv:**
+```bash
+# From editable install
+uv run rewardbench --model=your-model
+
+# One-off (no install)
+uv run --with rewardbench rewardbench --model=your-model
+```
+
+**Help:**
+```bash
 rewardbench --help
 ```
 
-### Running Evaluations
+### RewardBench 2 (Scripts)
 
-**RewardBench 2 (Latest):**
-
-For reference configs, see [eval configs](https://github.com/allenai/reward-bench/blob/main/scripts/configs/eval_configs.yaml) in `scripts/configs/eval_configs.yaml`.
+RewardBench 2 includes best-of-N and Ties evaluation. Use `scripts/run_v2.py`:
 
 ```bash
 # Basic usage
@@ -144,77 +215,102 @@ python scripts/run_v2.py --model=your-model
 python scripts/run_v2.py \
     --model=your-model \
     --batch_size=128 \
-    --torch_dtype=bfloat16 \
-    --num_proc=8 \
-    --dataloader_num_workers=4
+    --num_proc=16 \
+    --dataloader_num_workers=8
 
-# With Flash Attention 2 (maximum speed, requires flash-attn extra)
+# With Flash Attention 2 (requires flash-attn extra)
 python scripts/run_v2.py \
     --model=your-model \
-    --batch_size=128 \
     --attn_implementation=flash_attention_2
 
-# From editable install
-uv run python scripts/run_v2.py --model=your-model
+# Advanced reward model script (more control)
+python scripts/run_rm.py \
+    --model=your-model \
+    --batch_size=16 \
+    --num_proc=32 \
+    --dataloader_num_workers=4
 ```
 
-**Generative Models (LLM-as-judge):**
+**Config reference:**
+See [eval_configs.yaml](scripts/configs/eval_configs.yaml) for model-specific configurations.
 
-Rankings-based (default, compares 4 responses):
+### Generative Models (LLM-as-judge)
+
+Evaluate LLM-based reward models. Requires `[generative]` extra.
+
+**Rankings-based (default, compares 4 responses):**
 ```bash
-python scripts/run_generative_v2.py --model=your-model
+python scripts/run_generative_v2.py --model=gpt-4
+python scripts/run_generative_v2.py --model=meta-llama/Llama-3-70b-chat-hf
 ```
 
-Ratings-based (scores each response separately):
+**Ratings-based (scores each response separately):**
 ```bash
 python scripts/run_generative_v2.py --model=your-model --score_w_ratings
 ```
 
-Note: The Ties subset (20+ completions per prompt) automatically uses ratings mode.
-
-**RewardBench V1 (Core Evaluation Set):**
-
+**Using the CLI:**
 ```bash
-# Using the CLI binary
-rewardbench --model=your-model
-
-# With custom dataset
-rewardbench --model=your-model --dataset=your-dataset --batch_size=8
-
-# DPO models (pass reference model)
-rewardbench --model=your-dpo-model --ref_model=base-model
-
-# From editable install with uv
-uv run rewardbench --model=your-model
-
-# With uv (package install)
-uv run --with rewardbench rewardbench --model=your-model
+rewardbench-gen --model=gpt-3.5-turbo-0125
 ```
 
-**CLI vs Scripts:**
-- `rewardbench`: CLI for RewardBench v1 core set
-- `scripts/run_v2.py`: RewardBench 2 with best-of-N and Ties
-- `scripts/run_rm.py`: More control over reward model eval
-- `scripts/run_dpo.py`: Specifically for DPO models
+**Supported providers:**
+- OpenAI (gpt-4, gpt-3.5-turbo)
+- Anthropic (claude-3-*)
+- Google (gemini-*)
+- Together AI
+- Local models via vLLM (Linux + CUDA only)
 
-### Configuration & Performance
+**Note:** Ties subset (20+ completions) automatically uses ratings mode.
 
-**Default Settings (Optimized for Modern GPUs):**
+### DPO Models
+
+Evaluate Direct Preference Optimization models:
+
+```bash
+# Via CLI
+rewardbench \
+    --model=stabilityai/stablelm-zephyr-3b \
+    --ref_model=stabilityai/stablelm-3b-4e1t \
+    --batch_size=64
+
+# Via script (more control)
+python scripts/run_dpo.py \
+    --model=your-dpo-model \
+    --ref_model=base-model \
+    --batch_size=8
+```
+
+---
+
+## Configuration & Performance
+
+### Default Settings
+
+Optimized for modern GPUs (Ampere+):
 - **dtype**: `bfloat16` (better stability than float16)
-- **attn_implementation**: `sdpa` (Scaled Dot-Product Attention, PyTorch native)
-- **num_proc**: `8` (dataset operations parallelism)
-- **dataloader_num_workers**: `4` (PyTorch DataLoader workers)
+- **attn_implementation**: `sdpa` (PyTorch native, works everywhere)
+- **num_proc**: `8` (dataset parallelism)
+- **dataloader_num_workers**: `4` (DataLoader workers)
 
-**Performance Notes:**
-- **SDPA (default)**: Excellent performance, works out-of-box, no compilation needed
-- **Flash Attention 2 (optional)**: 2-4x faster on Ampere+ GPUs, requires compilation
-  - Install: `pip install rewardbench[flash-attn]`
-  - Use: `--attn_implementation=flash_attention_2`
-  - Requires: CUDA toolkit matching PyTorch version
-  - Build time: 5-10 min with ninja, 30-45 min without
-- **Eager (fallback)**: Use `--attn_implementation=eager` for CPU or debugging
+### Attention Implementations
 
-**Performance Tuning:**
+**SDPA (default):**
+- Excellent performance on modern GPUs
+- Works out-of-box, no compilation
+- PyTorch 2.0+ native
+
+**Flash Attention 2 (optional):**
+- 2-4x faster on Ampere+ GPUs (A100, H100, RTX 30/40)
+- Requires installation: `pip install rewardbench[flash-attn]`
+- Build time: 5-10 min with ninja, 30-45 min without
+- Use: `--attn_implementation=flash_attention_2`
+
+**Eager (fallback):**
+- Use for CPU or debugging: `--attn_implementation=eager`
+
+### Performance Tuning
+
 ```bash
 # High-performance system (16+ cores, A100/H100)
 python scripts/run_v2.py \
@@ -223,7 +319,7 @@ python scripts/run_v2.py \
     --num_proc=16 \
     --dataloader_num_workers=8
 
-# Maximum speed with Flash Attention 2 (requires flash-attn extra)
+# Maximum speed with Flash Attention 2
 python scripts/run_v2.py \
     --model=your-model \
     --batch_size=128 \
@@ -236,351 +332,208 @@ python scripts/run_v2.py \
     --num_proc=1 \
     --dataloader_num_workers=0
 
-# Older GPUs (use float16 instead of bfloat16)
+# Older GPUs (use float16)
 python scripts/run_v2.py \
     --model=your-model \
     --torch_dtype=float16
 ```
 
+---
+
+## Advanced Usage
+
+### Custom Datasets
+
+**From HuggingFace:**
+```bash
+rewardbench \
+    --model=your-model \
+    --dataset=allenai/ultrafeedback_binarized_cleaned \
+    --split=test_gen
+```
+
+**From local JSON:**
+```bash
+rewardbench \
+    --model=your-model \
+    --dataset=/path/to/dataset.jsonl \
+    --load_json
+```
+
+**Instruction datasets:**
+RewardBench auto-detects instruction datasets (no `chosen`/`rejected`, has `messages`) and logs model outputs without accuracy.
+
+### Result Uploading
+
+Upload results to HuggingFace Hub:
+
+```bash
+# Upload results as dataset
+rewardbench \
+    --model=your-model \
+    --push_results_to_hub
+
+# Add results to model card metadata
+rewardbench \
+    --model=your-model \
+    --upload_model_metadata_to_hf
+
+# Both
+rewardbench \
+    --model=your-model \
+    --push_results_to_hub \
+    --upload_model_metadata_to_hf
+```
+
 **Examples:**
+- Model with metadata: [vwxyzjn/rm_zephyr_new](https://huggingface.co/vwxyzjn/rm_zephyr_new)
+- Preference dataset outputs: [natolambert/rewardbench_eval_2339270924_2339270924](https://huggingface.co/datasets/natolambert/rewardbench_eval_2339270924_2339270924)
 
-1. Normal operation with custom dataset:
+### Ensembling Models
+
+Run offline ensemble tests to approximate using multiple reward models:
+
 ```bash
-rewardbench \
-    --model=OpenAssistant/reward-model-deberta-v3-large-v2 \
-    --dataset=allenai/ultrafeedback_binarized_cleaned \
-    --split=test_gen
-
-# Or with uv
-uv run rewardbench \
-    --model=OpenAssistant/reward-model-deberta-v3-large-v2 \
-    --dataset=allenai/ultrafeedback_binarized_cleaned \
-    --split=test_gen
+python analysis/run_ensemble_offline.py \
+    --models sfairXC/FsfairX-LLaMA3-RM-v0.1 \
+             openbmb/Eurus-RM-7b \
+             Nexusflow/Starling-RM-34B
 ```
 
-2. DPO model from local JSON dataset:
+**Generative ensembles (API only):**
 ```bash
-rewardbench \
-    --model=Qwen/Qwen1.5-0.5B-Chat \
-    --ref_model=Qwen/Qwen1.5-0.5B \
-    --dataset=/path/to/dataset.jsonl \
-    --load_json
-
-# Or with uv (one-off without install)
-uv run --with rewardbench rewardbench \
-    --model=Qwen/Qwen1.5-0.5B-Chat \
-    --ref_model=Qwen/Qwen1.5-0.5B \
-    --dataset=/path/to/dataset.jsonl \
-    --load_json
+python scripts/run_generative.py \
+    --model gpt-3.5-turbo-0125 \
+            claude-3-sonnet-20240229 \
+            meta-llama/Llama-3-70b-chat-hf
 ```
+Note: Must use odd number of models > 1.
 
-3. Local model with custom settings:
+### Best-of-N Rankings
+
+Create rankings across datasets:
+
 ```bash
-python scripts/run_v2.py \
-    --model=/path/to/local/model \
-    --batch_size=128 \
-    --trust_remote_code
-
-# Or with uv
-uv run python scripts/run_v2.py \
-    --model=/path/to/local/model \
-    --batch_size=128 \
-    --trust_remote_code
+python scripts/run_bon.py \
+    --model=OpenAssistant/oasst-rm-2.1-pythia-1.4b-epoch-2.5 \
+    --best_of=16
 ```
 
-**Generative RMs** can be run after installing with `[generative]` extra (see Installation above):
-```
-rewardbench-gen --model={}
-```
-For more information, see `scripts/run_generative.py`.
-Local models require vLLM. API models support OpenAI, Anthropic, Google Gemini, and Together.
+### Leaderboard Section Scores
 
-### Logging
+Compute prompt-weighted scores for Chat, Chat Hard, Safety, and Reasoning:
 
-The CLI comes with multiple advanced saving features for **model outputs** and **accuracy scores**. 
-These can be tied in metadata to reward models you own or uploaded as separate datasets to HuggingFace, such as for rejection sampling.
-For example, the following command does both:
-```
-rewardbench --model vwxyzjn/reward_modeling__EleutherAI_pythia-14m --batch_size 128 --tokenizer=EleutherAI/pythia-14m --push_results_to_hub --upload_model_metadata_to_hf --chat_template raw
-```
-Or, for an instruction dataset:
-```
-rewardbench --model vwxyzjn/reward_modeling__EleutherAI_pythia-14m --dataset HuggingFaceH4/no_robots --split test --batch_size 128 --tokenizer=EleutherAI/pythia-14m --push_results_to_hub --chat_template raw
-```
-(Note that chat templates only need to be specififed for older models)
-
-The key commands are:
-* `--push_results_to_hub` which uploads a dataset of scores and correctness.
-* ` --upload_model_metadata_to_hf` adds results directly to model.
-
-For an example of a model with accuracy metadata, look [here](https://huggingface.co/vwxyzjn/rm_zephyr_new).
-For an example of the outputs from a preference dataset, look [here](https://huggingface.co/datasets/natolambert/rewardbench_eval_2339270924_2339270924), and for instructions, look [here](https://huggingface.co/datasets/natolambert/rewardbench_eval_0329290924).
-
-This currently only works with DPO models for preference datasets, such as:
-```
-rewardbench --model Qwen/Qwen1.5-0.5B-Chat --ref_model Qwen/Qwen1.5-0.5B  --batch_size 128 --tokenizer=EleutherAI/pythia-14m --push_results_to_hub --upload_model_metadata_to_hf --chat_template raw
-```
-Open an issue if you would like complete functionality.
-
-## Full Installation from Source
-
-**Prerequisites:**
-- Python 3.10+ (3.10, 3.11, 3.12 supported)
-- PyTorch 2.0+ (will be installed automatically)
-- CUDA toolkit (for GPU support)
-
-**Recommended: UV (Fast and Reliable):**
-```bash
-# Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Clone and install
-git clone https://github.com/allenai/reward-bench.git
-cd reward-bench
-
-# Editable install (changes to code take effect immediately)
-uv sync                      # Base: reward models only
-uv sync --extra api          # + API models (OpenAI, Anthropic, etc.)
-uv sync --extra vllm         # + vLLM for local LLM inference (Linux+CUDA only)
-uv sync --extra generative   # + Both API and vLLM
-uv sync --extra dev          # + Development tools (black, pytest, etc.)
-
-# Set HuggingFace token
-export HF_TOKEN="your_token_here"
-# Or add to ~/.bashrc for persistence
-echo 'export HF_TOKEN="your_token_here"' >> ~/.bashrc
-```
-
-**Traditional: pip (Also Works):**
-```bash
-# Clone repository
-git clone https://github.com/allenai/reward-bench.git
-cd reward-bench
-
-# Editable install
-pip install -e .                    # Base
-pip install -e ".[flash-attn]"      # With Flash Attention 2
-pip install -e ".[generative]"      # With generative support
-pip install -e ".[dev]"             # With dev tools
-
-# Set HuggingFace token
-export HF_TOKEN="your_token_here"
-```
-
-**Key Versions (for reference):**
-- transformers: 5.6.2 (pinned for stability)
-- flash-attn: 2.7.2+ (optional extra, currently 2.8.3)
-- vLLM: 0.18+ (optional extra, Linux + CUDA only)
-- torch: 2.11+ (auto-detected for your platform)
-
-**Verify Installation:**
-```bash
-# Check it works
-uv run rewardbench --help
-uv run python scripts/run_v2.py --help
-
-# Test with a small model
-uv run rewardbench --model=natolambert/gpt2-dummy-rm --debug
-```
-
-## Training
-
-For training, we recommend using [`open-instruct`](https://github.com/allenai/open-instruct).
-
-## Contribute Your Model
-
-For now, in order to contribute your model to the leaderboard, open an issue with the model name on HuggingFace (you can still evaluate local models with RewardBench, see below).
-If custom code is needed, please open a PR that enables it in our inference stack (see [`rewardbench/models`](https://github.com/allenai/reward-bench/tree/main/rewardbench/models) for more information).
-
-# Evaluating Models
-
-For reference configs, see `scripts/configs/eval_configs.yaml`.
-For reference on Chat Templates, many models follow the base / sft model terminology [here](https://github.com/lm-sys/FastChat/blob/main/fastchat/conversation.py).
-A small model for debugging is available at `natolambert/gpt2-dummy-rm`.
-
-The core scripts automatically evaluate our core evaluation set. To run these on [existing preference sets](https://huggingface.co/datasets/allenai/pref-test-sets), add the argument `--pref_sets`.
-
-## Running Reward Models
-
-**Basic Usage:**
-```bash
-# Standard reward models
-python scripts/run_rm.py --model=openbmb/UltraRM-13b --chat_template=openbmb --batch_size=8
-python scripts/run_rm.py --model=OpenAssistant/oasst-rm-2.1-pythia-1.4b-epoch-2.5 --chat_template=oasst_pythia
-
-# With custom settings
-python scripts/run_rm.py \
-    --model=PKU-Alignment/beaver-7b-v1.0-cost \
-    --chat_template=pku-align \
-    --batch_size=16 \
-    --num_proc=8 \
-    --dataloader_num_workers=4
-
-# Models requiring trust_remote_code
-python scripts/run_rm.py \
-    --model=IDEA-CCNL/Ziya-LLaMA-7B-Reward \
-    --batch_size=32 \
-    --trust_remote_code \
-    --chat_template=Ziya
-
-# From editable install
-uv run python scripts/run_rm.py --model=your-model
-```
-
-To run these models with AI2 infrastructure, run:
-```
-python scripts/submit_eval_jobs.py
-```
-Or for example, the best of N sweep on the non-default image:
-```
-python scripts/submit_eval_jobs.py --eval_on_bon --image=nathanl/herm_bon
-``` 
-Note: for AI2 users, you must set `beaker secret write HF_TOKEN <your_write_token_here>` to make the scripts work.
-
-Models using the default abstraction `AutoModelForSequenceClassification.from_pretrained` can also be loaded locally. Expanding this functionality is TODO. E.g.
-```
-python scripts/run_rm.py --model=/net/nfs.cirrascale/allennlp/hamishi/EasyLM/rm_13b_3ep --chat_template=tulu --batch_size=8
-```
-
-## Running DPO Models
-
-And for DPO:
-```
-python scripts/run_dpo.py --model=stabilityai/stablelm-zephyr-3b --ref_model=stabilityai/stablelm-3b-4e1t --batch_size=8
-python scripts/run_dpo.py --model=stabilityai/stablelm-2-zephyr-1_6b --ref_model=stabilityai/stablelm-2-1_6b --batch_size=16
-```
-
-## Ensembling RMs
-For reward models already in RewardBench, you can run an offline ensemble test to approximate using multiple reward models in your system. To try this, you can run:
-```
-python analysis/run_ensemble_offline.py --models sfairXC/FsfairX-LLaMA3-RM-v0.1 openbmb/Eurus-RM-7b Nexusflow/Starling-RM-34B
-```
-
-## Running Generative RMs (LLM-as-a-judge)
-Local and API models are supported. For example, run OpenAI's models like:
-```
-python scripts/run_generative.py --model=gpt-3.5-turbo-0125
-```
-Local models are loaded from HuggingFace, though some are also available via Together's API. Run Llama 3 locally with
-```
-python scripts/run_generative.py --model=meta-llama/Llama-3-70b-chat-hf --force_local
-```
-Or, with Together's API with:
-```
-python scripts/run_generative.py --model=meta-llama/Llama-3-70b-chat-hf
-```
-
-We are adding support for generative ensembles (only via API for now), run with:
-```
-python scripts/run_generative.py --model gpt-3.5-turbo-0125 claude-3-sonnet-20240229 meta-llama/Llama-3-70b-chat-hf
-```
-Note: these must be an odd number of models > 1.
-
-## Creating Best of N (BoN) rankings
-
-To create the ranking across the dataset, run (best_of 8 being placeholder, 16 should be fine as eval logic will handle lower best of N numbers):
-```
-python scripts/run_bon.py --model=OpenAssistant/oasst-rm-2.1-pythia-1.4b-epoch-2.5 --chat_template=oasst_pythia --best_of=8 --debug
-```
-## Getting Leaderboard Section Scores
-
-**Important**: We use prompt-weighed scores for the sections Chat, Chat Hard, Safety, and Reasoning (with math equalized to code here) to avoid assigning too much credit to small subsets (e.g. MT Bench ones). Use the following code to compute the scores for each category, assuming `RewardBench` is installed:
-```
+```python
 from rewardbench.constants import EXAMPLE_COUNTS, SUBSET_MAPPING
 from rewardbench.utils import calculate_scores_per_section
 
 metrics = {
   "alpacaeval-easy": 0.5,
   "alpacaeval-hard": 0.7052631578947368,
-  "alpacaeval-length": 0.5894736842105263,
-  "chat_template": "tokenizer",
-  "donotanswer": 0.8235294117647058,
-  "hep-cpp": 0.6280487804878049,
-  "hep-go": 0.6341463414634146,
-  "hep-java": 0.7073170731707317,
-  "hep-js": 0.6646341463414634,
-  "hep-python": 0.5487804878048781,
-  "hep-rust": 0.6463414634146342,
-  "llmbar-adver-GPTInst": 0.391304347826087,
-  "llmbar-adver-GPTOut": 0.46808510638297873,
-  "llmbar-adver-manual": 0.3695652173913043,
-  "llmbar-adver-neighbor": 0.43283582089552236,
-  "llmbar-natural": 0.52,
-  "math-prm": 0.2953020134228188,
-  "model": "PKU-Alignment/beaver-7b-v1.0-cost",
+  # ... (subset scores)
+  "model": "your-model",
   "model_type": "Seq. Classifier",
-  "mt-bench-easy": 0.5714285714285714,
-  "mt-bench-hard": 0.5405405405405406,
-  "mt-bench-med": 0.725,
-  "refusals-dangerous": 0.97,
-  "refusals-offensive": 1,
-  "xstest-should-refuse": 1,
-  "xstest-should-respond": 0.284
 }
 
-# Calculate and print the scores per section
-scores_per_section = calculate_scores_per_section(EXAMPLE_COUNTS, SUBSET_MAPPING, metrics)
+scores_per_section = calculate_scores_per_section(
+    EXAMPLE_COUNTS, SUBSET_MAPPING, metrics
+)
 print(scores_per_section)
 ```
 
-## Repository structure
+---
+
+## Development
+
+### Contributing Models
+
+To add your model to the leaderboard:
+1. Open an issue with the model name on HuggingFace
+2. If custom code is needed, open a PR ([see `rewardbench/models`](rewardbench/models))
+
+Local models can be evaluated without submission.
+
+### Training
+
+For training reward models, use [`open-instruct`](https://github.com/allenai/open-instruct).
+
+### Repository Structure
 
 ```
-├── README.md                   <- The top-level README for researchers using this project
-├── analysis/                   <- Directory of tools to analyze RewardBench results or other reward model properties
-├── rewardbench/                <- Core utils and modeling files
-|   ├── models/                     ├── Standalone files for running existing reward models
-|   └── *.py                        └── RewardBench tools and utilities
-├── scripts/                    <- Scripts and configs to evaluate reward models
-├── tests                       <- Unit tests
-├── Dockerfile                  <- Build file for reproducible and scaleable research at AI2
-├── LICENSE
-├── Makefile                    <- Makefile with commands like `make style`
-└── setup.py                    <- Makes project pip installable (pip install -e .) so `alignment` can be imported
+├── README.md                   <- This file
+├── analysis/                   <- Analysis tools
+├── rewardbench/                <- Core utils and models
+│   ├── models/                 <- Model implementations
+│   └── *.py                    <- Utilities
+├── scripts/                    <- Evaluation scripts
+│   ├── run_v2.py              <- RewardBench 2
+│   ├── run_rm.py              <- Reward models
+│   ├── run_dpo.py             <- DPO models
+│   └── configs/               <- Model configs
+├── tests/                      <- Unit tests
+├── Dockerfile                  <- Docker build
+├── pyproject.toml             <- Package config (uv)
+└── CLAUDE.md                  <- Development guide
 ```
 
-## Maintenance
+### Code Quality
 
-This section is designed for AI2 usage, but may help others evaluating models with Docker.
+```bash
+# Format code
+uv run black .
+uv run isort .
+
+# Lint
+uv run flake8 --max-line-length 120 rewardbench/ scripts/
+
+# Test
+uv run pytest
+```
+
+---
+
+## Docker & Maintenance
 
 ### Docker Images
 
-Two Docker images are available:
+Two images available:
 
 | Image | Dockerfile | Use Case | Build Time |
 |-------|------------|----------|------------|
-| `rewardbench` | `Dockerfile` | Reward models, API-based LLM judges | ~5-10 min |
-| `rewardbench-vllm` | `Dockerfile.vllm` | Local LLM inference via vLLM | ~45 min |
+| `rewardbench` | `Dockerfile` | Reward models, API judges | ~5-10 min |
+| `rewardbench-vllm` | `Dockerfile.vllm` | Local LLM inference (vLLM) | ~45 min |
 
-The base image uses torch ≤2.8 with prebuilt flash-attn wheels. The vllm image uses torch 2.9 (required by vllm) and builds flash-attn from source.
-
-To build locally:
+**Build locally:**
 ```bash
-# Base image (fast)
 docker build -t rewardbench . --platform linux/amd64
-
-# vLLM image (slow, includes local LLM inference)
 docker build -f Dockerfile.vllm -t rewardbench-vllm . --platform linux/amd64
 ```
 
-Images are automatically built and pushed to Beaker on merge to main:
+**Auto-built on main:**
 - `nathanl/rewardbench_auto`: Base image
 - `nathanl/rewardbench_vllm_auto`: vLLM image
 
-## Citation
-Please cite our work with the following:
-```
-@misc{lambert2024rewardbench,
-      title={RewardBench: Evaluating Reward Models for Language Modeling}, 
-      author={Nathan Lambert and Valentina Pyatkin and Jacob Morrison and LJ Miranda and Bill Yuchen Lin and Khyathi Chandu and Nouha Dziri and Sachin Kumar and Tom Zick and Yejin Choi and Noah A. Smith and Hannaneh Hajishirzi},
-      year={2024},
-      eprint={2403.13787},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
-}
+### AI2 Infrastructure
+
+For AI2 users only:
+```bash
+# Submit evaluation jobs
+python scripts/submit_eval_jobs.py
+
+# Best-of-N sweep
+python scripts/submit_eval_jobs.py --eval_on_bon --image=nathanl/herm_bon
+
+# Note: Set beaker secret: beaker secret write HF_TOKEN <token>
 ```
 
-```
+---
+
+## Citation
+
+If you use RewardBench in your research, please cite:
+
+**RewardBench 2:**
+```bibtex
 @misc{malik2025rewardbench2advancingreward,
       title={RewardBench 2: Advancing Reward Model Evaluation}, 
       author={Saumya Malik and Valentina Pyatkin and Sander Land and Jacob Morrison and Noah A. Smith and Hannaneh Hajishirzi and Nathan Lambert},
@@ -589,5 +542,17 @@ Please cite our work with the following:
       archivePrefix={arXiv},
       primaryClass={cs.CL},
       url={https://arxiv.org/abs/2506.01937}, 
+}
+```
+
+**RewardBench (v1):**
+```bibtex
+@misc{lambert2024rewardbench,
+      title={RewardBench: Evaluating Reward Models for Language Modeling}, 
+      author={Nathan Lambert and Valentina Pyatkin and Jacob Morrison and LJ Miranda and Bill Yuchen Lin and Khyathi Chandu and Nouha Dziri and Sachin Kumar and Tom Zick and Yejin Choi and Noah A. Smith and Hannaneh Hajishirzi},
+      year={2024},
+      eprint={2403.13787},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
 }
 ```
