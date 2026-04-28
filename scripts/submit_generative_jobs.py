@@ -1,3 +1,6 @@
+# NOTE: This script is AI2-internal and requires access to Beaker infrastructure.
+# External users should use the run_*.py scripts directly instead.
+
 import argparse
 import copy
 import os

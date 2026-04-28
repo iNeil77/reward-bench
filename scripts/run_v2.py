@@ -26,7 +26,10 @@ from accelerate import Accelerator
 from accelerate.logging import get_logger
 from datasets import Dataset
 from tqdm import tqdm
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, BitsAndBytesConfig
+
+# Enable faster downloads with hf_transfer (if available)
+os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
 
 # fschat is optional - only needed if --chat_template is specified
 try:
@@ -77,17 +80,14 @@ def get_args():
     parser.add_argument("--max_length", type=int, default=2048, help="Max length of RM inputs (passed to pipeline)")
     parser.add_argument("--debug", action="store_true", help="Debug on small set of examples")
     parser.add_argument(
-        "--disable_beaker_save", action="store_true", help="disable saving the main results in a file for AI2 Beaker"
-    )
-    parser.add_argument(
         "--quantized", action="store_true", help="enable quantization for models that are not quantized by default"
     )
     parser.add_argument(
         "--torch_dtype",
         type=str,
-        default="float16",
+        default="bfloat16",
         choices=["float16", "bfloat16", "float32", "float64"],
-        help="PyTorch dtype (default: float16)",
+        help="PyTorch dtype (default: bfloat16)",
     )
     parser.add_argument(
         "--attn_implementation",
@@ -95,6 +95,9 @@ def get_args():
         default=None,
         choices=["eager", "sdpa", "flash_attention_2"],
         help="Attention implementation to use (default: None)",
+    )
+    parser.add_argument(
+        "--num_proc", type=int, default=8, help="Number of processes for dataset operations (default: 8)"
     )
     args = parser.parse_args()
     return args
@@ -211,6 +214,7 @@ def main():
         custom_dialogue_formatting=custom_dialogue,
         tokenizer=tokenizer,
         logger=logger,
+        num_proc=args.num_proc,
     )
 
     # copy id for saving, then remove
@@ -242,15 +246,23 @@ def main():
     }
 
     if quantized:
+        # Use BitsAndBytesConfig for transformers 5.x compatibility
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
         model_kwargs = {
-            "load_in_8bit": True,
+            "quantization_config": quantization_config,
             "device_map": {"": current_device},
             "torch_dtype": torch_dtype if torch.cuda.is_available() else None,
+            # Transformers 5.x optimizations for faster weight loading
+            "use_safetensors": True,
+            "low_cpu_mem_usage": True,
         }
     else:
         model_kwargs = {
             "device_map": "auto" if torch.cuda.is_available() else "cpu",
             "torch_dtype": torch_dtype,
+            # Transformers 5.x optimizations for faster weight loading
+            "use_safetensors": True,
+            "low_cpu_mem_usage": True,
         }
 
     # if attn_implementation is not specified, this falls back to Hugging Face's default
@@ -356,7 +368,7 @@ def main():
     # print per subset and log into results_grouped file
     present_subsets = np.unique(subsets)
     for subset in present_subsets:
-        subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset)
+        subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset, num_proc=args.num_proc)
         # recompute "results" column for ties subset with different scoring method
         if subset.lower() == "ties":
             ties_subset_with_results, overall_score = process_single_model(subset_dataset)
@@ -388,7 +400,6 @@ def main():
             sub_path,
             args.debug,
             local_only=args.do_not_save,
-            save_metrics_for_beaker=not args.disable_beaker_save,
             best_of_n=True,
         )
     if not args.do_not_save:

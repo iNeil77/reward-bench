@@ -24,7 +24,11 @@ from accelerate import Accelerator
 from accelerate.logging import get_logger
 from fastchat.conversation import get_conv_template
 from tqdm import tqdm
+from transformers import BitsAndBytesConfig
 from trl.trainer.utils import DPODataCollatorWithPadding
+
+# Enable faster downloads with hf_transfer (if available)
+os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
 
 from rewardbench import (
     DPO_MODEL_CONFIG,
@@ -67,17 +71,17 @@ def get_args():
     )
     parser.add_argument("--debug", action="store_true", default=False, help="use only 10 examples")
     parser.add_argument(
-        "--disable_beaker_save", action="store_true", help="disable saving the main results in a file for AI2 Beaker"
-    )
-    parser.add_argument(
         "--not_quantized", action="store_true", help="disable quantization for models that are quantized by default"
     )
     parser.add_argument(
         "--torch_dtype",
         type=str,
-        default="float16",
+        default="bfloat16",
         choices=["float16", "bfloat16", "float32", "float64"],
-        help="PyTorch dtype (default: float16)",
+        help="PyTorch dtype (default: bfloat16)",
+    )
+    parser.add_argument(
+        "--num_proc", type=int, default=8, help="Number of processes for dataset operations (default: 8)"
     )
     args = parser.parse_args()
     args.torch_dtype = torch_dtype_mapping(args.torch_dtype)
@@ -117,11 +121,11 @@ def main():
     tokenizer_builder = config["tokenizer_builder"]
 
     # check datatype from argparse
-    if args.torch_dtype == torch.bfloat16:
-        logger.warning("Loading weights directly as bfloat16 for PyTorch dtype")
-        torch_dtype = torch.bfloat16
-    else:
+    if args.torch_dtype == torch.float16:
+        logger.warning("Loading weights as float16 for PyTorch dtype")
         torch_dtype = torch.float16
+    else:
+        torch_dtype = torch.bfloat16
 
     assert args.model != args.ref_model, "policy and reference model should be different"
     # load chat template
@@ -154,6 +158,7 @@ def main():
         tokenizer=tokenizer,
         logger=logger,
         keep_columns=["text_chosen", "text_rejected", "id", "prompt"],
+        num_proc=args.num_proc,
     )
 
     dataset = dataset.remove_columns("id")
@@ -177,21 +182,35 @@ def main():
         model_kwargs = {
             "device_map": "auto",
             "torch_dtype": torch_dtype if torch.cuda.is_available() else None,
+            # Transformers 5.x optimizations for faster weight loading
+            "use_safetensors": True,
+            "low_cpu_mem_usage": True,
         }
         model_kwargs_ref = {
             "device_map": "auto",
             "torch_dtype": torch_dtype if torch.cuda.is_available() else None,
+            # Transformers 5.x optimizations for faster weight loading
+            "use_safetensors": True,
+            "low_cpu_mem_usage": True,
         }
     else:
+        # Use BitsAndBytesConfig for transformers 5.x compatibility
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
         model_kwargs = {
-            "load_in_8bit": True,
+            "quantization_config": quantization_config,
             "device_map": "auto",
             "torch_dtype": torch_dtype if torch.cuda.is_available() else None,
+            # Transformers 5.x optimizations for faster weight loading
+            "use_safetensors": True,
+            "low_cpu_mem_usage": True,
         }
         model_kwargs_ref = {
-            "load_in_8bit": True,
+            "quantization_config": quantization_config,
             "device_map": "auto",
             "torch_dtype": torch_dtype if torch.cuda.is_available() else None,
+            # Transformers 5.x optimizations for faster weight loading
+            "use_safetensors": True,
+            "low_cpu_mem_usage": True,
         }
 
     model = model_builder(
@@ -221,7 +240,7 @@ def main():
     # tokenize dataset
     column_names = list(dataset.features)
 
-    tokenized_dataset = dataset.map(dpo.tokenize_row, remove_columns=column_names)
+    tokenized_dataset = dataset.map(dpo.tokenize_row, remove_columns=column_names, num_proc=args.num_proc)
 
     dataloader = torch.utils.data.DataLoader(
         tokenized_dataset,
@@ -287,7 +306,7 @@ def main():
     # print per subset and log into results_grouped file
     present_subsets = np.unique(subsets)
     for subset in present_subsets:
-        subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset)
+        subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset, num_proc=args.num_proc)
         num_correct = sum(subset_dataset["results"])
         num_total = len(subset_dataset["results"])
         print(f"{subset}: {num_correct}/{num_total} ({num_correct/num_total})")
@@ -308,7 +327,6 @@ def main():
         sub_path,
         args.debug,
         local_only=args.do_not_save,
-        save_metrics_for_beaker=not args.disable_beaker_save,
     )
     if not args.do_not_save:
         logger.info(f"Uploaded reward model results to {results_url}")

@@ -26,7 +26,10 @@ from accelerate import Accelerator
 from accelerate.logging import get_logger
 from fastchat.conversation import get_conv_template
 from tqdm import tqdm
-from transformers import AutoTokenizer, pipeline
+from transformers import AutoTokenizer, BitsAndBytesConfig, pipeline
+
+# Enable faster downloads with hf_transfer (if available)
+os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
 
 from rewardbench import (
     REWARD_MODEL_CONFIG,
@@ -153,13 +156,23 @@ def main():
         "return_token_type_ids": False,
     }
     if quantized:
+        # Use BitsAndBytesConfig for transformers 5.x compatibility
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
         model_kwargs = {
-            "load_in_8bit": True,
+            "quantization_config": quantization_config,
             "device_map": {"": current_device},
-            "torch_dtype": torch.float16 if torch.cuda.is_available() else None,
+            "torch_dtype": torch.bfloat16 if torch.cuda.is_available() else None,
+            # Transformers 5.x optimizations for faster weight loading
+            "use_safetensors": True,
+            "low_cpu_mem_usage": True,
         }
     else:
-        model_kwargs = {"device_map": {"": current_device}}
+        model_kwargs = {
+            "device_map": {"": current_device},
+            # Transformers 5.x optimizations for faster weight loading
+            "use_safetensors": True,
+            "low_cpu_mem_usage": True,
+        }
 
     model = model_builder(args.model, **model_kwargs, trust_remote_code=trust_remote_code)
     reward_pipe = pipeline_builder(

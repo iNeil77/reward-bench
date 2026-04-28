@@ -86,9 +86,6 @@ def get_args():
         "--num_threads", type=int, default=10, help="number of threads to use for parallel processing of examples"
     )
     parser.add_argument(
-        "--disable_beaker_save", action="store_true", help="disable saving the main results in a file for AI2 Beaker"
-    )
-    parser.add_argument(
         "--force_local", action="store_true", default=False, help="force local run, even if model is on Together API"
     )
     args = parser.parse_args()
@@ -429,7 +426,6 @@ def main():
         sub_path,
         args.debug,
         local_only=do_not_save,
-        save_metrics_for_beaker=not args.disable_beaker_save,
     )
     if not do_not_save:
         logger.info(f"Uploaded reward model results to {results_url}")

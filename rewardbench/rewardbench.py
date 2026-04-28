@@ -34,7 +34,10 @@ from datasets import Dataset
 from huggingface_hub import EvalResult, HfApi, ModelCard, ModelCardData
 from huggingface_hub.repocard import RepoCard
 from tqdm import tqdm
-from transformers import AutoTokenizer, HfArgumentParser
+from transformers import AutoTokenizer, BitsAndBytesConfig, HfArgumentParser
+
+# Enable faster downloads with hf_transfer (if available)
+os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
 
 from rewardbench import (
     DPO_MODEL_CONFIG,
@@ -86,10 +89,12 @@ class Args:
     """The batch size to use."""
     max_length: int = 512
     """The max length to use."""
-    torch_dtype: Literal["float16", "bfloat16", "float32", "float64"] = "float16"
-    """PyTorch dtype (default: float16)"""
+    torch_dtype: Literal["float16", "bfloat16", "float32", "float64"] = "bfloat16"
+    """PyTorch dtype (default: bfloat16)"""
     attn_implementation: Optional[Literal["eager", "sdpa", "flash_attention_2"]] = None
     """Attention implementation to use (default: None)"""
+    num_proc: int = 8
+    """Number of processes for dataset operations (default: 8)"""
 
     # system args
     load_json: bool = False
@@ -318,6 +323,7 @@ def rewardbench(args: Args):
             tokenizer=tokenizer,
             logger=logger,
             return_extra_data=True,
+            num_proc=args.num_proc,
         )
     else:
         dataset = load_and_process_dataset(
@@ -327,6 +333,7 @@ def rewardbench(args: Args):
             tokenizer=tokenizer,
             conv=conv,
             prioritize_instructions=args.prioritize_scoring,
+            num_proc=args.num_proc,
         )
 
     # check if "chosen" and "rejected" in the dataset features
@@ -359,10 +366,15 @@ def rewardbench(args: Args):
             tokenizer.bos_token_id = tokenizer.eos_token_id
             tokenizer.pad_token_id = tokenizer.eos_token_id
 
+        # Use BitsAndBytesConfig for transformers 5.x compatibility
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
         model_kwargs = {
-            "load_in_8bit": True,
+            "quantization_config": quantization_config,
             "device_map": "auto" if torch.cuda.is_available() else "cpu",
-            "torch_dtype": torch.float16 if torch.cuda.is_available() else None,
+            "torch_dtype": torch.bfloat16 if torch.cuda.is_available() else None,
+            # Transformers 5.x optimizations for faster weight loading
+            "use_safetensors": True,
+            "low_cpu_mem_usage": True,
         }
         model = model_builder(
             args.model,
@@ -387,7 +399,7 @@ def rewardbench(args: Args):
         # tokenize dataset
         column_names = list(dataset.features)
 
-        tokenized_dataset = dataset.map(dpo.tokenize_row, remove_columns=column_names)
+        tokenized_dataset = dataset.map(dpo.tokenize_row, remove_columns=column_names, num_proc=args.num_proc)
         dataloader = torch.utils.data.DataLoader(
             tokenized_dataset,
             batch_size=args.batch_size,
@@ -422,16 +434,24 @@ def rewardbench(args: Args):
             "return_token_type_ids": False,
         }
         if quantized:
+            # Use BitsAndBytesConfig for transformers 5.x compatibility
+            quantization_config = BitsAndBytesConfig(load_in_8bit=True)
             model_kwargs = {
-                "load_in_8bit": True,
+                "quantization_config": quantization_config,
                 "device_map": {"": current_device},
                 "torch_dtype": torch_dtype if torch.cuda.is_available() else None,
+                # Transformers 5.x optimizations for faster weight loading
+                "use_safetensors": True,  # Use safetensors format (faster)
+                "low_cpu_mem_usage": True,  # Reduce CPU memory usage during loading
             }
         else:
             # note, device map auto does not work for bitsandbytes quantized models
             model_kwargs = {
                 "device_map": "auto",
                 "torch_dtype": torch_dtype,
+                # Transformers 5.x optimizations for faster weight loading
+                "use_safetensors": True,  # Use safetensors format (faster)
+                "low_cpu_mem_usage": True,  # Reduce CPU memory usage during loading
             }
 
         # if attn_implementation is not specified, this falls back to Hugging Face's default

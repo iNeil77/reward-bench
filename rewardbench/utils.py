@@ -108,7 +108,6 @@ def save_to_hub(
     debug: bool = False,
     local_only: bool = False,
     best_of_n: bool = False,
-    save_metrics_for_beaker: bool = False,
 ):
     """
     Utility for saving results in dict to the hub in programatic organization.
@@ -120,19 +119,11 @@ def save_to_hub(
         debug: if True, save to debug repo on HF.
         local_only: if True, do not save to HF (for most non-AI2 users).
         best_of_n: if True, save to version 2 dataset results repo on HF.
-        save_metrics_for_beaker: if True, save metrics for AI2 beaker visualization.
 
     Returns:
         scores_url: URL to the saved scores (optional).
     """
     scores_path = f"./results/{target_path}{model_name}.json"
-
-    if save_metrics_for_beaker:
-        # ai2 internal visualization, not needed externally, global path intentional.
-        dirname = os.path.dirname("/output/metrics.json")
-        os.makedirs(dirname, exist_ok=True)  # redundant in Beaker code
-        with open("/output/metrics.json", "w+") as f:  # save format for AI2 beaker to show results
-            json.dump(results_dict, f)
 
     dirname = os.path.dirname(scores_path)
     os.makedirs(dirname, exist_ok=True)
@@ -179,6 +170,7 @@ def load_and_process_dataset(
     tokenizer: PreTrainedTokenizer = None,
     logger: logging.Logger = None,
     prioritize_instructions: bool = False,
+    num_proc: int = 8,
 ) -> Dataset:
     """
     Load a preference dataset or an instruction dataset from the datasets library.
@@ -202,6 +194,7 @@ def load_and_process_dataset(
         tokenizer (PreTrainedTokenizer): HuggingFace tokenizer
         logger (logging.Logger): Logger object
         prioritize_instructions (bool): If True, prioritize processing as instruction data when both types are present
+        num_proc (int): Number of processes to use for dataset mapping operations (default: 8)
 
     Returns:
         dataset (Dataset): The loaded dataset with prompt, text_chosen, and text_rejected columns for preference data,
@@ -268,7 +261,7 @@ def load_and_process_dataset(
         if isinstance(features["chosen"], Sequence):
             dataset = dataset.map(
                 process_preference_data,
-                num_proc=8,
+                num_proc=num_proc,
                 load_from_cache_file=False,
             )
     else:
@@ -314,6 +307,7 @@ def load_eval_dataset(
     keep_columns: List[str] = ["text_chosen", "text_rejected", "id"],
     return_extra_data: bool = False,
     max_turns: int = None,
+    num_proc: int = 8,
 ) -> tuple[Dataset, list[str]]:
     """
     Loads either the core eval set for RewardBench or the existing preference data test sets.
@@ -328,6 +322,7 @@ def load_eval_dataset(
         keep_columns: list of columns to keep in the dataset.
         return_extra_data: return extra metadata for expanded logging (mostly in CLI)
         max_turns: maximum number of turns in the dialogue (usually even). If None (default), no filtering is done.
+        num_proc: Number of processes to use for dataset mapping operations (default: 8)
 
     Returns:
         dataset: loaded dataset with required properties.
@@ -370,7 +365,7 @@ def load_eval_dataset(
             dataset = raw_dataset.map(
                 prepare_dialogue_from_tokenizer,
                 fn_kwargs={"tokenizer": tokenizer},
-                num_proc=8,
+                num_proc=num_proc,
                 load_from_cache_file=False,
             )
 
@@ -381,7 +376,7 @@ def load_eval_dataset(
             dataset = raw_dataset.map(
                 prepare_dialogue,
                 fn_kwargs={"dialogue_template": conv},
-                num_proc=8,  # using >1 process causes issues with re-assigning prompt in example
+                num_proc=num_proc,  # using >1 process causes issues with re-assigning prompt in example
                 load_from_cache_file=False,
             )
     else:
@@ -441,6 +436,7 @@ def load_eval_dataset_multi(
     keep_columns: List[str] = ["texts_chosen", "texts_rejected", "id"],
     return_extra_data: bool = False,
     max_turns: int = None,
+    num_proc: int = 8,
 ) -> tuple[Dataset, list[str]]:
     """
     Loads either the core eval set for RewardBench 2 or a user-passed dataset, for running generative models
@@ -477,7 +473,7 @@ def load_eval_dataset_multi(
             dataset = raw_dataset.map(
                 prepare_dialogue_from_tokenizer,
                 fn_kwargs={"tokenizer": tokenizer},
-                num_proc=8,
+                num_proc=num_proc,
                 load_from_cache_file=False,
             )
 
@@ -488,7 +484,7 @@ def load_eval_dataset_multi(
             dataset = raw_dataset.map(
                 prepare_dialogue,
                 fn_kwargs={"dialogue_template": conv},
-                num_proc=8,  # using >1 process causes issues with re-assigning prompt in example
+                num_proc=num_proc,  # using >1 process causes issues with re-assigning prompt in example
                 load_from_cache_file=False,
             )
     else:
@@ -599,6 +595,7 @@ def load_bon_dataset_v2(
     logger: logging.Logger = None,
     keep_columns: List[str] = ["text_chosen", "text_rejected", "text", "id"],
     local: bool = False,
+    num_proc: int = 8,
 ):
     """
     Loads the BON candidates dataset.
@@ -668,7 +665,7 @@ def load_bon_dataset_v2(
             dataset = unrolled_dataset.map(
                 prepare_dialogue,
                 fn_kwargs={"dialogue_template": conv, "ift": True},
-                num_proc=8,
+                num_proc=num_proc,
             )
     else:
         if logger is not None:
@@ -703,6 +700,7 @@ def load_bon_dataset(
     tokenizer: PreTrainedTokenizer = None,
     logger: logging.Logger = None,
     remove_columns: List[str] = None,
+    num_proc: int = 8,
 ):
     """
     Loads the BON candidates dataset.
@@ -791,7 +789,7 @@ def load_bon_dataset(
             dataset = unrolled_dataset.map(
                 prepare_dialogue,
                 fn_kwargs={"dialogue_template": conv, "ift": True},
-                num_proc=8,
+                num_proc=num_proc,
             )
     else:
         if logger is not None:

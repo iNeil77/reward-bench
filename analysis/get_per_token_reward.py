@@ -18,6 +18,7 @@ import argparse
 import hashlib
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -31,9 +32,13 @@ from tqdm import tqdm
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
+    BitsAndBytesConfig,
     T5ForConditionalGeneration,
     pipeline,
 )
+
+# Enable faster downloads with hf_transfer (if available)
+os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "1")
 
 from rewardbench import models
 
@@ -307,11 +312,18 @@ def load_reward_pipeline(
     process_index (int): the machine to run the process.
     RETURNS (transformers.Pipeline) the reward model pipeline
     """
-    model_kwargs = {"device_map": {"": process_index}}
+    model_kwargs = {
+        "device_map": {"": process_index},
+        # Transformers 5.x optimizations for faster weight loading
+        "use_safetensors": True,
+        "low_cpu_mem_usage": True,
+    }
     if config["quantized"]:
+        # Use BitsAndBytesConfig for transformers 5.x compatibility
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
         model_kwargs.update(
             {
-                "load_in_8bit": True,
+                "quantization_config": quantization_config,
                 "torch_dtype": torch.float16 if torch.cuda.is_available() else None,
             }
         )

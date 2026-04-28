@@ -30,19 +30,44 @@ uv run rewardbench --help
 - `v1` - Legacy dependencies (fschat, trl) for v1 scripts
 - `dev` - Development tools (black, flake8, isort, pytest)
 
+## Default Configuration
+
+**Default PyTorch dtype: bfloat16**
+- All scripts default to `bfloat16` for better numerical stability and modern GPU compatibility
+- Override with `--torch_dtype` if needed: `--torch_dtype=float16` for older GPUs
+
 ## Version Pinning Policy
 
 **Always pin `transformers` and `vllm` versions** to avoid dependency headaches. These packages have frequent breaking changes and complex dependency trees.
 
 Current pinned versions:
-- `transformers==4.57.6`
-- `vllm==0.13.0` (in `[vllm]` extra)
+- `transformers==5.6.2`
+- `vllm>=0.18.0` (in `[vllm]` extra, currently resolves to 0.20.0)
 
 When updating these versions:
 1. Update the pin in `pyproject.toml`
 2. Run `uv lock` to update the lock file
 3. Test the entry points: `uv run rewardbench --help` and `uv run rewardbench-gen --help`
 4. Run tests: `uv run pytest`
+
+### Transformers 5.x Compatibility
+
+The codebase now supports both transformers 4.x and 5.x. Key changes for 5.x compatibility:
+
+- **Quantization**: Uses `BitsAndBytesConfig(load_in_8bit=True)` instead of direct `load_in_8bit` parameter
+- **LlamaTokenizer**: Falls back to `AutoTokenizer` if `LlamaTokenizer` is not available (removed in 5.x)
+- **Performance Optimizations**: 
+  - `use_safetensors=True` - Faster and safer weight loading
+  - `low_cpu_mem_usage=True` - Reduces memory peaks during model loading
+  - `HF_HUB_ENABLE_HF_TRANSFER=1` - Uses hf_transfer for faster downloads (requires `hf_transfer` package)
+
+To test with transformers 5.x:
+```bash
+pip install "transformers>=5.0"
+rewardbench --model=<model-path> --batch-size=32
+```
+
+**Note**: Weight loading in transformers 5.x is optimized with safetensors. Ensure your models use `.safetensors` format for best performance. PyTorch `.bin` files will still work but load slower.
 
 ## Docker Images
 
@@ -104,3 +129,12 @@ uv sync --extra generative
 ### vLLM platform issues
 
 vLLM has specific platform requirements. On unsupported platforms (like aarch64/ARM), you may need custom wheels. See the main CLAUDE.md in `~/dev/` for DGX Spark-specific instructions.
+
+## AI2 Beaker Scripts
+
+The following scripts are AI2-internal and require access to Beaker infrastructure:
+- `scripts/submit_eval_jobs.py`
+- `scripts/submit_eval_jobs_v2.py`
+- `scripts/submit_generative_jobs.py`
+
+External users should use the `run_*.py` scripts directly instead. All Beaker-specific functionality has been removed from the main evaluation scripts.

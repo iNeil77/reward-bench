@@ -48,7 +48,7 @@ dependencies = [
     "torchvision",
     "torchaudio",
     "tiktoken",
-    "transformers==4.57.6",
+    "transformers==5.6.2",
     "wandb",
 ]
 
@@ -68,8 +68,9 @@ api = [
     "together",
 ]
 # Local LLM inference via vLLM (requires Linux + CUDA, pins torch version)
+# Note: vLLM 0.18+ supports transformers 5.x
 vllm = [
-    "vllm==0.13.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "vllm>=0.18.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 # Full generative setup (API + vLLM) - backwards compatible alias
 generative = [

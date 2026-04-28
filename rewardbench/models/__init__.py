@@ -18,11 +18,16 @@ from transformers import (
     AutoModelForCausalLM,
     AutoModelForSequenceClassification,
     AutoTokenizer,
-    LlamaTokenizer,
     MixtralForCausalLM,
     Qwen2_5_VLForConditionalGeneration,
     T5ForConditionalGeneration,
 )
+
+# LlamaTokenizer is deprecated in transformers 5.x, use AutoTokenizer instead
+try:
+    from transformers import LlamaTokenizer
+except ImportError:
+    LlamaTokenizer = AutoTokenizer
 
 from .armorm import ArmoRMPipeline
 from .beaver import BeaverCostPipeline, BeaverPipeline, LlamaForScore
