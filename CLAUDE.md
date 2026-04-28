@@ -24,6 +24,7 @@ uv run rewardbench --help
 
 ## Optional Extras
 
+- `flash-attn` - Flash Attention 2 for faster inference (requires compilation, 30+ min build time)
 - `api` - API-based LLM clients (openai, anthropic, google-genai, together) - works on any platform
 - `vllm` - Local LLM inference via vLLM - Linux + CUDA only, pins torch to 2.9
 - `generative` - Both api + vllm (backwards compatible alias)
@@ -38,9 +39,10 @@ uv run rewardbench --help
 
 **Default Attention Implementation: flash_attention_2**
 - All scripts default to Flash Attention 2 for faster inference on modern GPUs
-- Requires `flash-attn` package (installed automatically with base dependencies)
+- **Optional but recommended**: Install with `uv sync --extra flash-attn` or `pip install flash-attn>=2.7.2`
+- Transformers will automatically fall back to SDPA if flash-attn is not installed
 - Override with `--attn_implementation` if needed: `--attn_implementation=sdpa` or `--attn_implementation=eager`
-- Falls back to SDPA or eager if flash-attn is not available
+- Flash-attn requires compilation (30+ min) unless prebuilt wheels are available for your platform
 
 **Parallelism Configuration**
 - `--num_proc=8`: Number of processes for dataset operations (map, filter)
@@ -54,7 +56,7 @@ uv run rewardbench --help
 
 Current pinned versions:
 - `transformers==5.6.2`
-- `flash-attn>=2.7.2` (currently resolves to 2.8.3)
+- `flash-attn>=2.7.2` (in `[flash-attn]` extra, currently resolves to 2.8.3, optional but recommended)
 - `vllm>=0.18.0` (in `[vllm]` extra, currently resolves to 0.20.0)
 
 When updating these versions:

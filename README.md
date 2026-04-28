@@ -50,6 +50,9 @@ It also will detect if a instruction dataset is passed (by checking for not havi
 ```bash
 uv pip install rewardbench
 
+# For Flash Attention 2 (optional, faster inference but requires compilation)
+uv pip install rewardbench[flash-attn]
+
 # For generative models (LLM-as-judge, vLLM, API providers)
 uv pip install rewardbench[generative]
 ```
@@ -57,6 +60,9 @@ uv pip install rewardbench[generative]
 **Method 2: Package Install with pip:**
 ```bash
 pip install rewardbench
+
+# For Flash Attention 2 (optional, recommended)
+pip install rewardbench[flash-attn]
 
 # For generative models
 pip install rewardbench[generative]
@@ -72,10 +78,11 @@ cd reward-bench
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Install in editable mode (changes to code take effect immediately)
-uv sync                      # base install
-uv sync --extra generative   # with generative support (API + vLLM)
-uv sync --extra api          # API-only (OpenAI, Anthropic, etc.)
-uv sync --extra dev          # development tools (black, pytest, etc.)
+uv sync                        # base install
+uv sync --extra flash-attn     # with Flash Attention 2 (optional, 30+ min build)
+uv sync --extra generative     # with generative support (API + vLLM)
+uv sync --extra api            # API-only (OpenAI, Anthropic, etc.)
+uv sync --extra dev            # development tools (black, pytest, etc.)
 
 # Run scripts directly
 uv run python scripts/run_v2.py --model=your-model
@@ -143,9 +150,15 @@ uv run rewardbench --model=your-model
 
 **Default Settings (Optimized for Modern GPUs):**
 - **dtype**: `bfloat16` (better stability than float16)
-- **attn_implementation**: `flash_attention_2` (faster inference)
+- **attn_implementation**: `flash_attention_2` (falls back to SDPA if flash-attn not installed)
 - **num_proc**: `8` (dataset operations parallelism)
 - **dataloader_num_workers**: `4` (PyTorch DataLoader workers)
+
+**Note on Flash Attention:**
+- Flash Attention 2 provides 2-4x faster inference but requires compilation (30+ minutes)
+- Install with: `pip install flash-attn>=2.7.2` or `uv sync --extra flash-attn`
+- If not installed, transformers automatically falls back to SDPA (still fast on modern GPUs)
+- Override with `--attn_implementation=sdpa` or `--attn_implementation=eager` if needed
 
 **Performance Tuning:**
 ```bash
@@ -268,6 +281,7 @@ cd reward-bench
 
 # Editable install
 pip install -e .                    # Base
+pip install -e ".[flash-attn]"      # With Flash Attention 2
 pip install -e ".[generative]"      # With generative support
 pip install -e ".[dev]"             # With dev tools
 
@@ -277,8 +291,8 @@ export HF_TOKEN="your_token_here"
 
 **Key Versions (for reference):**
 - transformers: 5.6.2 (pinned for stability)
-- flash-attn: 2.7.2+ (currently 2.8.3, for fast attention)
-- vLLM: 0.18+ (Linux + CUDA only)
+- flash-attn: 2.7.2+ (optional extra, currently 2.8.3)
+- vLLM: 0.18+ (optional extra, Linux + CUDA only)
 - torch: 2.11+ (auto-detected for your platform)
 
 **Verify Installation:**
