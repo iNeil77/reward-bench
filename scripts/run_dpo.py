@@ -55,6 +55,17 @@ if HF_TOKEN is not None:
     _login(token=HF_TOKEN, add_to_git_credential=False)
 
 
+def calculate_subset_score(subset_data):
+    """Helper function for parallel subset processing - must be at module level for multiprocessing."""
+    subset, dataset = subset_data
+    subset_dataset = dataset.filter(lambda example: example["subset"] == subset, num_proc=1)
+    results_array = np.array(subset_dataset["results"])
+    num_correct = int(np.sum(results_array))
+    num_total = len(results_array)
+    score = num_correct / num_total if num_total > 0 else 0
+    return subset, num_correct, num_total, score
+
+
 def get_args():
     """
     Parse arguments strings model and chat_template
@@ -339,16 +350,6 @@ def main():
     else:
         save_modifier = ""
     results_grouped["chat_template"] = args.chat_template if not hasattr(tokenizer, "chat_template") else "tokenizer"
-
-    # Helper function for parallel subset processing
-    def calculate_subset_score(subset_data):
-        subset, dataset = subset_data
-        subset_dataset = dataset.filter(lambda example: example["subset"] == subset, num_proc=1)
-        results_array = np.array(subset_dataset["results"])
-        num_correct = int(np.sum(results_array))
-        num_total = len(results_array)
-        score = num_correct / num_total if num_total > 0 else 0
-        return subset, num_correct, num_total, score
 
     # Process subsets in parallel
     present_subsets = np.unique(subsets)

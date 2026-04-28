@@ -56,6 +56,24 @@ if HF_TOKEN is not None:
     _login(token=HF_TOKEN, add_to_git_credential=False)
 
 
+def calculate_subset_score(subset_data):
+    """Helper function for parallel subset processing - must be at module level for multiprocessing."""
+    from rewardbench import process_single_model
+
+    subset, dataset = subset_data
+    subset_dataset = dataset.filter(lambda example: example["subset"] == subset, num_proc=1)
+
+    if subset.lower() == "ties":
+        ties_subset_with_results, overall_score = process_single_model(subset_dataset)
+        return subset, overall_score, ties_subset_with_results
+    else:
+        results_array = np.array(subset_dataset["results"])
+        num_correct = np.sum(results_array)
+        num_total = len(results_array)
+        score = num_correct / num_total if num_total > 0 else 0
+        return subset, score, None
+
+
 def get_args():
     """
     Parse arguments strings model and chat_template
@@ -368,21 +386,6 @@ def main():
     results_grouped["model_type"] = model_type
     chat_template = args.chat_template if not check_tokenizer_chat_template(tokenizer) else "tokenizer"
     results_grouped["chat_template"] = chat_template
-
-    # Helper function for parallel subset processing
-    def calculate_subset_score(subset_data):
-        subset, dataset = subset_data
-        subset_dataset = dataset.filter(lambda example: example["subset"] == subset, num_proc=1)
-
-        if subset.lower() == "ties":
-            ties_subset_with_results, overall_score = process_single_model(subset_dataset)
-            return subset, overall_score, ties_subset_with_results
-        else:
-            results_array = np.array(subset_dataset["results"])
-            num_correct = np.sum(results_array)
-            num_total = len(results_array)
-            score = num_correct / num_total if num_total > 0 else 0
-            return subset, score, None
 
     # Process subsets in parallel
     present_subsets = np.unique(subsets)
