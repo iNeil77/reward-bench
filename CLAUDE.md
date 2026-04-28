@@ -36,6 +36,12 @@ uv run rewardbench --help
 - All scripts default to `bfloat16` for better numerical stability and modern GPU compatibility
 - Override with `--torch_dtype` if needed: `--torch_dtype=float16` for older GPUs
 
+**Default Attention Implementation: flash_attention_2**
+- All scripts default to Flash Attention 2 for faster inference on modern GPUs
+- Requires `flash-attn` package (installed automatically with base dependencies)
+- Override with `--attn_implementation` if needed: `--attn_implementation=sdpa` or `--attn_implementation=eager`
+- Falls back to SDPA or eager if flash-attn is not available
+
 **Parallelism Configuration**
 - `--num_proc=8`: Number of processes for dataset operations (map, filter)
 - `--dataloader_num_workers=4`: Number of worker processes for PyTorch DataLoader

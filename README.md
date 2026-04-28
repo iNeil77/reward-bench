@@ -143,6 +143,7 @@ uv run rewardbench --model=your-model
 
 **Default Settings (Optimized for Modern GPUs):**
 - **dtype**: `bfloat16` (better stability than float16)
+- **attn_implementation**: `flash_attention_2` (faster inference)
 - **num_proc**: `8` (dataset operations parallelism)
 - **dataloader_num_workers**: `4` (PyTorch DataLoader workers)
 

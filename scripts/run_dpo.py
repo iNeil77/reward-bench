@@ -82,6 +82,13 @@ def get_args():
         help="PyTorch dtype (default: bfloat16)",
     )
     parser.add_argument(
+        "--attn_implementation",
+        type=str,
+        default="flash_attention_2",
+        choices=["eager", "sdpa", "flash_attention_2"],
+        help="Attention implementation to use (default: flash_attention_2)",
+    )
+    parser.add_argument(
         "--num_proc", type=int, default=8, help="Number of processes for dataset operations (default: 8)"
     )
     parser.add_argument(
@@ -186,6 +193,7 @@ def main():
         model_kwargs = {
             "device_map": "auto",
             "torch_dtype": torch_dtype if torch.cuda.is_available() else None,
+            "attn_implementation": args.attn_implementation,
             # Transformers 5.x optimizations for faster weight loading
             "use_safetensors": True,
             "low_cpu_mem_usage": True,
@@ -193,6 +201,7 @@ def main():
         model_kwargs_ref = {
             "device_map": "auto",
             "torch_dtype": torch_dtype if torch.cuda.is_available() else None,
+            "attn_implementation": args.attn_implementation,
             # Transformers 5.x optimizations for faster weight loading
             "use_safetensors": True,
             "low_cpu_mem_usage": True,
@@ -204,6 +213,7 @@ def main():
             "quantization_config": quantization_config,
             "device_map": "auto",
             "torch_dtype": torch_dtype if torch.cuda.is_available() else None,
+            "attn_implementation": args.attn_implementation,
             # Transformers 5.x optimizations for faster weight loading
             "use_safetensors": True,
             "low_cpu_mem_usage": True,
@@ -212,6 +222,7 @@ def main():
             "quantization_config": quantization_config,
             "device_map": "auto",
             "torch_dtype": torch_dtype if torch.cuda.is_available() else None,
+            "attn_implementation": args.attn_implementation,
             # Transformers 5.x optimizations for faster weight loading
             "use_safetensors": True,
             "low_cpu_mem_usage": True,

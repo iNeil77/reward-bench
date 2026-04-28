@@ -65,6 +65,13 @@ def get_args():
         "--debug", action="store_true", help="run on common preference sets instead of our custom eval set"
     )
     parser.add_argument(
+        "--attn_implementation",
+        type=str,
+        default="flash_attention_2",
+        choices=["eager", "sdpa", "flash_attention_2"],
+        help="Attention implementation to use (default: flash_attention_2)",
+    )
+    parser.add_argument(
         "--dataloader_num_workers", type=int, default=4, help="Number of worker processes for DataLoader (default: 4)"
     )
     args = parser.parse_args()
@@ -165,6 +172,7 @@ def main():
             "quantization_config": quantization_config,
             "device_map": {"": current_device},
             "torch_dtype": torch.bfloat16 if torch.cuda.is_available() else None,
+            "attn_implementation": args.attn_implementation,
             # Transformers 5.x optimizations for faster weight loading
             "use_safetensors": True,
             "low_cpu_mem_usage": True,
@@ -172,6 +180,7 @@ def main():
     else:
         model_kwargs = {
             "device_map": {"": current_device},
+            "attn_implementation": args.attn_implementation,
             # Transformers 5.x optimizations for faster weight loading
             "use_safetensors": True,
             "low_cpu_mem_usage": True,

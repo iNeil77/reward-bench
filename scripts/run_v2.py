@@ -93,9 +93,9 @@ def get_args():
     parser.add_argument(
         "--attn_implementation",
         type=str,
-        default=None,
+        default="flash_attention_2",
         choices=["eager", "sdpa", "flash_attention_2"],
-        help="Attention implementation to use (default: None)",
+        help="Attention implementation to use (default: flash_attention_2)",
     )
     parser.add_argument(
         "--num_proc", type=int, default=8, help="Number of processes for dataset operations (default: 8)"
@@ -269,10 +269,8 @@ def main():
             "low_cpu_mem_usage": True,
         }
 
-    # if attn_implementation is not specified, this falls back to Hugging Face's default
-    # strategy (which chooses between sdpa and eager depending on pytorch version)
-    if args.attn_implementation:
-        model_kwargs["attn_implementation"] = args.attn_implementation
+    # Use specified attention implementation (defaults to flash_attention_2)
+    model_kwargs["attn_implementation"] = args.attn_implementation
 
     if args.revision:
         model = model_builder(args.model, revision=args.revision, **model_kwargs, trust_remote_code=trust_remote_code)

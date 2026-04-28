@@ -91,8 +91,8 @@ class Args:
     """The max length to use."""
     torch_dtype: Literal["float16", "bfloat16", "float32", "float64"] = "bfloat16"
     """PyTorch dtype (default: bfloat16)"""
-    attn_implementation: Optional[Literal["eager", "sdpa", "flash_attention_2"]] = None
-    """Attention implementation to use (default: None)"""
+    attn_implementation: Optional[Literal["eager", "sdpa", "flash_attention_2"]] = "flash_attention_2"
+    """Attention implementation to use (default: flash_attention_2)"""
     num_proc: int = 8
     """Number of processes for dataset operations (default: 8)"""
     dataloader_num_workers: int = 4
@@ -458,10 +458,8 @@ def rewardbench(args: Args):
                 "low_cpu_mem_usage": True,  # Reduce CPU memory usage during loading
             }
 
-        # if attn_implementation is not specified, this falls back to Hugging Face's default
-        # strategy (which chooses between sdpa and eager depending on pytorch version)
-        if args.attn_implementation:
-            model_kwargs["attn_implementation"] = args.attn_implementation
+        # Use specified attention implementation (defaults to flash_attention_2)
+        model_kwargs["attn_implementation"] = args.attn_implementation
 
         model = model_builder(
             args.model, **model_kwargs, revision=args.revision, trust_remote_code=args.trust_remote_code
