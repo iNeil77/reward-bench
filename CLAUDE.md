@@ -37,30 +37,32 @@ uv run rewardbench --help
 - All scripts default to `bfloat16` for better numerical stability and modern GPU compatibility
 - Override with `--torch_dtype` if needed: `--torch_dtype=float16` for older GPUs
 
-**Default Attention Implementation: flash_attention_2**
-- All scripts default to Flash Attention 2 for maximum inference speed
-- **Optional but strongly recommended**: `uv sync --extra flash-attn`
-- **Requires CUDA toolkit matching PyTorch version** for compilation
-- Transformers automatically falls back to SDPA if flash-attn not installed (still fast)
-- Override with `--attn_implementation=sdpa` or `--attn_implementation=eager` if needed
+**Default Attention Implementation: SDPA**
+- All scripts default to SDPA (Scaled Dot-Product Attention) for broad compatibility
+- SDPA provides excellent performance on modern GPUs (PyTorch 2.0+ native)
+- Works immediately without any compilation or CUDA version matching
+- Override with `--attn_implementation=flash_attention_2` for maximum speed (requires flash-attn extra)
+- Override with `--attn_implementation=eager` for CPU or debugging
 
-**Installing Flash Attention:**
+**Optional: Flash Attention 2 for Maximum Speed**
+Flash Attention 2 provides 2-4x faster inference on Ampere+ GPUs but requires compilation:
+
 ```bash
-# Option 1: Let uv handle it (requires matching CUDA/PyTorch versions)
+# Option 1: Install via uv (requires matching CUDA/PyTorch versions)
 pip install ninja  # speeds up compilation to ~5-10 min
 uv sync --extra flash-attn
 
 # Option 2: Pre-install in your environment (recommended for custom setups)
 pip install flash-attn==2.8.3 --no-build-isolation
 
-# Option 3: Skip it - transformers will use SDPA (still good performance)
-uv sync  # base install without flash-attn
+# Then use: --attn_implementation=flash_attention_2
 ```
 
-**Common Issues:**
-- **CUDA version mismatch**: PyTorch CUDA version must match system CUDA
-- **Example**: PyTorch built with CUDA 13.0 requires CUDA 13.0 toolkit installed
-- **Solution**: Either install matching CUDA toolkit or use SDPA (no flash-attn)
+**When to use Flash Attention:**
+- You have Ampere+ GPUs (A100, H100, RTX 30/40 series)
+- CUDA toolkit matches PyTorch CUDA version
+- Need absolute maximum throughput
+- Willing to wait 5-45 min for initial compilation
 
 **Parallelism Configuration**
 - `--num_proc=8`: Number of processes for dataset operations (map, filter)

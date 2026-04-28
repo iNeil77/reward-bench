@@ -67,9 +67,9 @@ def get_args():
     parser.add_argument(
         "--attn_implementation",
         type=str,
-        default="flash_attention_2",
+        default="sdpa",
         choices=["eager", "sdpa", "flash_attention_2"],
-        help="Attention implementation to use (default: flash_attention_2)",
+        help="Attention implementation to use (default: sdpa)",
     )
     parser.add_argument(
         "--dataloader_num_workers", type=int, default=4, help="Number of worker processes for DataLoader (default: 4)"

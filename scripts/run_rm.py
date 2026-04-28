@@ -86,9 +86,9 @@ def get_args():
     parser.add_argument(
         "--attn_implementation",
         type=str,
-        default="flash_attention_2",
+        default="sdpa",
         choices=["eager", "sdpa", "flash_attention_2"],
-        help="Attention implementation to use (default: flash_attention_2)",
+        help="Attention implementation to use (default: sdpa)",
     )
     parser.add_argument(
         "--num_proc", type=int, default=8, help="Number of processes for dataset operations (default: 8)"
@@ -232,7 +232,7 @@ def main():
             "low_cpu_mem_usage": True,
         }
 
-    # Use specified attention implementation (defaults to flash_attention_2)
+    # Use specified attention implementation (defaults to sdpa)
     model_kwargs["attn_implementation"] = args.attn_implementation
 
     model = model_builder(args.model, **model_kwargs, trust_remote_code=trust_remote_code)

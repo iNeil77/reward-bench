@@ -116,6 +116,12 @@ python scripts/run_v2.py \
     --num_proc=8 \
     --dataloader_num_workers=4
 
+# With Flash Attention 2 (maximum speed, requires flash-attn extra)
+python scripts/run_v2.py \
+    --model=your-model \
+    --batch_size=128 \
+    --attn_implementation=flash_attention_2
+
 # From editable install
 uv run python scripts/run_v2.py --model=your-model
 ```
@@ -154,17 +160,18 @@ uv run rewardbench --model=your-model
 
 **Default Settings (Optimized for Modern GPUs):**
 - **dtype**: `bfloat16` (better stability than float16)
-- **attn_implementation**: `flash_attention_2` (auto-falls back to SDPA if not installed)
+- **attn_implementation**: `sdpa` (Scaled Dot-Product Attention, PyTorch native)
 - **num_proc**: `8` (dataset operations parallelism)
 - **dataloader_num_workers**: `4` (PyTorch DataLoader workers)
 
-**Note on Flash Attention 2:**
-- Provides 2-4x faster inference on Ampere+ GPUs (A100, H100, RTX 30/40 series)
-- **Optional extra**: Install with `pip install rewardbench[flash-attn]`
-- **Requires**: CUDA toolkit matching your PyTorch CUDA version
-- **Build time**: 5-10 min with ninja, 30-45 min without
-- **Automatic fallback**: Uses SDPA if flash-attn not available (still fast)
-- Override with `--attn_implementation=sdpa` or `--attn_implementation=eager`
+**Performance Notes:**
+- **SDPA (default)**: Excellent performance, works out-of-box, no compilation needed
+- **Flash Attention 2 (optional)**: 2-4x faster on Ampere+ GPUs, requires compilation
+  - Install: `pip install rewardbench[flash-attn]`
+  - Use: `--attn_implementation=flash_attention_2`
+  - Requires: CUDA toolkit matching PyTorch version
+  - Build time: 5-10 min with ninja, 30-45 min without
+- **Eager (fallback)**: Use `--attn_implementation=eager` for CPU or debugging
 
 **Performance Tuning:**
 ```bash
@@ -174,6 +181,12 @@ python scripts/run_v2.py \
     --batch_size=128 \
     --num_proc=16 \
     --dataloader_num_workers=8
+
+# Maximum speed with Flash Attention 2 (requires flash-attn extra)
+python scripts/run_v2.py \
+    --model=your-model \
+    --batch_size=128 \
+    --attn_implementation=flash_attention_2
 
 # Debugging (single-threaded)
 python scripts/run_v2.py \
