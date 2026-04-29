@@ -67,7 +67,10 @@ class _AceCodeRM(Qwen2ForCausalLM):
 
         value = self.v_head(last_hidden).squeeze(-1)  # (B, T)
         # Pick the last real token in each row (works for any padding side).
-        last_idx = attention_mask.sum(dim=-1, keepdim=True) - 1  # (B, 1)
+        # Build the gather index on the same device as `value` — under
+        # device_map="auto" sharding, attention_mask lives on the first shard
+        # (cuda:0) while `value` may have ended up on a later shard.
+        last_idx = (attention_mask.sum(dim=-1, keepdim=True) - 1).to(value.device)  # (B, 1)
         rm_scores = value.gather(dim=-1, index=last_idx).squeeze(-1)  # (B,)
 
         if return_past_key_values:
