@@ -44,7 +44,6 @@ from rewardbench import (
 )
 
 
-
 def get_args():
     """
     Parse arguments strings model and chat_template
@@ -76,6 +75,9 @@ def get_args():
     )
     parser.add_argument(
         "--dataloader_num_workers", type=int, default=4, help="Number of worker processes for DataLoader (default: 4)"
+    )
+    parser.add_argument(
+        "--num_proc", type=int, default=8, help="Number of processes for HF dataset map/filter (default: 8)"
     )
     args = parser.parse_args()
     return args
@@ -153,6 +155,7 @@ def main():
         tokenizer=tokenizer,
         logger=logger,
         remove_columns=["config", "prompt", "dataset_details", "model_input", "input"],
+        num_proc=args.num_proc,
         # remove columns saves spave on GPU when running inference
     )
     # copy id for saving, then remove
@@ -299,8 +302,8 @@ def main():
     # will get these from the source dataset when loading
     out_dataset = out_dataset.remove_columns("text")
 
-    alpaca_eval = out_dataset.filter(lambda x: x["subset"] == "alpaca_eval")
-    mt_bench = out_dataset.filter(lambda x: x["subset"] == "mt_bench")
+    alpaca_eval = out_dataset.filter(lambda x: x["subset"] == "alpaca_eval", num_proc=args.num_proc)
+    mt_bench = out_dataset.filter(lambda x: x["subset"] == "mt_bench", num_proc=args.num_proc)
 
     # remove subset column from both
     alpaca_eval = alpaca_eval.remove_columns("subset")
@@ -311,10 +314,18 @@ def main():
     mt_bench = mt_bench.remove_columns("model_input")
 
     # split into per-model
-    alpaca_eval_zephyr = alpaca_eval.filter(lambda x: x["model"] == "HuggingFaceH4/zephyr-7b-beta")
-    alpaca_eval_tulu = alpaca_eval.filter(lambda x: x["model"] == "allenai/tulu-2-dpo-13b")
-    mt_bench_zephyr = mt_bench.filter(lambda x: x["model"] == "HuggingFaceH4/zephyr-7b-beta")
-    mt_bench_tulu = mt_bench.filter(lambda x: x["model"] == "allenai/tulu-2-dpo-13b")
+    alpaca_eval_zephyr = alpaca_eval.filter(
+        lambda x: x["model"] == "HuggingFaceH4/zephyr-7b-beta", num_proc=args.num_proc
+    )
+    alpaca_eval_tulu = alpaca_eval.filter(
+        lambda x: x["model"] == "allenai/tulu-2-dpo-13b", num_proc=args.num_proc
+    )
+    mt_bench_zephyr = mt_bench.filter(
+        lambda x: x["model"] == "HuggingFaceH4/zephyr-7b-beta", num_proc=args.num_proc
+    )
+    mt_bench_tulu = mt_bench.filter(
+        lambda x: x["model"] == "allenai/tulu-2-dpo-13b", num_proc=args.num_proc
+    )
 
     # def flatten and to dict
     def flatten_data(dataset):

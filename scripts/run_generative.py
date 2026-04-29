@@ -45,7 +45,6 @@ from rewardbench.generative import (
 from rewardbench.utils import calculate_scores_per_section
 
 
-
 def get_args():
     """
     Parse arguments strings model and chat_template
@@ -77,6 +76,9 @@ def get_args():
     )
     parser.add_argument(
         "--num_threads", type=int, default=10, help="number of threads to use for parallel processing of examples"
+    )
+    parser.add_argument(
+        "--num_proc", type=int, default=8, help="Number of processes for HF dataset map/filter (default: 8)"
     )
     parser.add_argument(
         "--force_local", action="store_true", default=False, help="force local run, even if model is on Together API"
@@ -178,6 +180,7 @@ def main():
         logger=logger,
         keep_columns=["text_chosen", "text_rejected", "id"],
         max_turns=4,
+        num_proc=args.num_proc,
     )
 
     # copy id for saving, then remove
@@ -327,7 +330,11 @@ def main():
             chat_template = get_conv_template(args.chat_template)
         else:
             chat_template = None
-        dataset_prompts = dataset.map(format_judgements, fn_kwargs={"optional_chat_template": chat_template})
+        dataset_prompts = dataset.map(
+            format_judgements,
+            fn_kwargs={"optional_chat_template": chat_template},
+            num_proc=args.num_proc,
+        )
         # collect texts of dataset in list
         prompts = dataset_prompts["text"]
         prompt_ids = dataset_prompts["prompt_ids"]
@@ -395,7 +402,7 @@ def main():
     # print per subset and log into results_grouped file
     present_subsets = np.unique(subsets)
     for subset in present_subsets:
-        subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset)
+        subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset, num_proc=args.num_proc)
         num_correct = sum(subset_dataset["results"])
         num_total = len(subset_dataset["results"])
         print(f"{subset}: {num_correct}/{num_total} ({num_correct/num_total})")

@@ -248,7 +248,7 @@ def load_and_process_dataset(
     else:
         dataset = dataset.map(
             process_instruction_data,
-            num_proc=8,
+            num_proc=num_proc,
             load_from_cache_file=False,
         )
 
@@ -263,7 +263,7 @@ def load_and_process_dataset(
         dataset = dataset.map(
             prepare_dialogue_from_tokenizer,
             fn_kwargs={"tokenizer": tokenizer, "ift": not is_preference_data},
-            num_proc=8,
+            num_proc=num_proc,
             load_from_cache_file=False,
         )
     else:
@@ -272,7 +272,7 @@ def load_and_process_dataset(
         dataset = dataset.map(
             prepare_dialogue,
             fn_kwargs={"dialogue_template": conv, "ift": not is_preference_data},
-            num_proc=8,
+            num_proc=num_proc,
             load_from_cache_file=False,
         )
 
@@ -383,7 +383,7 @@ def load_eval_dataset(
         dataset = raw_dataset.map(
             map_conversations,
             fn_kwargs={"core_set": core_set},
-            num_proc=8,
+            num_proc=num_proc,
         )
 
     if max_turns is not None:
@@ -393,7 +393,7 @@ def load_eval_dataset(
         def filter_long_turns(batch):
             return len(batch["text_chosen"]) <= max_turns
 
-        dataset = dataset.filter(filter_long_turns)
+        dataset = dataset.filter(filter_long_turns, num_proc=num_proc)
 
     # take column subset from dataset
     subsets = dataset["subset"]
@@ -497,7 +497,7 @@ def load_eval_dataset_multi(
         dataset = raw_dataset.map(
             map_conversations,
             fn_kwargs={"core_set": core_set},
-            num_proc=8,
+            num_proc=num_proc,
         )
         logger.info(f"Dataset columns: {dataset.column_names}")
 
@@ -508,7 +508,7 @@ def load_eval_dataset_multi(
         def filter_long_turns(batch):
             return len(batch["texts_chosen"][0]) <= max_turns
 
-        dataset = dataset.filter(filter_long_turns)
+        dataset = dataset.filter(filter_long_turns, num_proc=num_proc)
 
     # take column subset from dataset
 
@@ -637,6 +637,8 @@ def load_bon_dataset_v2(
             dataset = unrolled_dataset.map(
                 prepare_dialogue_from_tokenizer,
                 fn_kwargs={"tokenizer": tokenizer, "ift": True},
+                num_proc=num_proc,
+                load_from_cache_file=False,
             )
 
         # else use FastChat to get chat template
@@ -662,7 +664,7 @@ def load_bon_dataset_v2(
         dataset = unrolled_dataset.map(
             map_conversations_ift,
             # fn_kwargs={"core_set": core_set},
-            num_proc=8,
+            num_proc=num_proc,
         )
 
     # take column subset from dataset
@@ -761,6 +763,8 @@ def load_bon_dataset(
             dataset = unrolled_dataset.map(
                 prepare_dialogue_from_tokenizer,
                 fn_kwargs={"tokenizer": tokenizer, "ift": True},
+                num_proc=num_proc,
+                load_from_cache_file=False,
             )
 
         # else use FastChat to get chat template
@@ -786,7 +790,7 @@ def load_bon_dataset(
         dataset = unrolled_dataset.map(
             map_conversations_ift,
             # fn_kwargs={"core_set": core_set},
-            num_proc=8,
+            num_proc=num_proc,
         )
 
     # remove column input

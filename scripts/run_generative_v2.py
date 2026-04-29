@@ -52,7 +52,6 @@ from rewardbench.generative_v2 import (
 )
 
 
-
 def get_args():
     """
     Parse arguments strings model and chat_template
@@ -91,6 +90,9 @@ def get_args():
     )
     parser.add_argument(
         "--num_threads", type=int, default=10, help="number of threads to use for parallel processing of examples"
+    )
+    parser.add_argument(
+        "--num_proc", type=int, default=8, help="Number of processes for HF dataset map/filter (default: 8)"
     )
     parser.add_argument(
         "--force_local", action="store_true", default=False, help="force local run, even if model is on Together API"
@@ -192,15 +194,16 @@ def main():
         logger=logger,
         keep_columns=["texts_chosen", "texts_rejected", "id", "subset", "num_correct"],
         max_turns=4,
+        num_proc=args.num_proc,
     )
 
     # copy id for saving, then remove
     # save ties_ids separately because they are needed for processing ties results
-    ties_ids = dataset.filter(lambda example: example["subset"] == "Ties")["id"]
+    ties_ids = dataset.filter(lambda example: example["subset"] == "Ties", num_proc=args.num_proc)["id"]
 
     # separate dataset into dataset for non-ties and ties_dataset for ties based on "subset" == "Ties"
-    ties_dataset = dataset.filter(lambda example: example["subset"] == "Ties")
-    dataset = dataset.filter(lambda example: example["subset"] != "Ties")
+    ties_dataset = dataset.filter(lambda example: example["subset"] == "Ties", num_proc=args.num_proc)
+    dataset = dataset.filter(lambda example: example["subset"] != "Ties", num_proc=args.num_proc)
     nonties_ids = dataset["id"]
     dataset = dataset.remove_columns("id")
 
@@ -557,7 +560,9 @@ def main():
         if args.score_w_ratings:
             # Process non-ties dataset with ratings
             logger.info("*** Run inference on non-ties subsets with ratings ***")
-            dataset_formatted = dataset.map(format_ratings, fn_kwargs={"is_ties": False})
+            dataset_formatted = dataset.map(
+                format_ratings, fn_kwargs={"is_ties": False}, num_proc=args.num_proc
+            )
             results = []
             for i, batch in enumerate(dataset_formatted):
                 if args.debug and i % 10 == 0:
@@ -578,7 +583,11 @@ def main():
                 chat_template = get_conv_template(args.chat_template)
             else:
                 chat_template = None
-            dataset_prompts = dataset.map(format_judgements, fn_kwargs={"optional_chat_template": chat_template})
+            dataset_prompts = dataset.map(
+                format_judgements,
+                fn_kwargs={"optional_chat_template": chat_template},
+                num_proc=args.num_proc,
+            )
 
             # Generate judgements
             prompts = dataset_prompts["text"]
@@ -614,7 +623,9 @@ def main():
 
         # Process ties dataset with ratings (mandatory)
         logger.info("*** Run inference on Ties subset with ratings ***")
-        ties_dataset_formatted = ties_dataset.map(format_ratings, fn_kwargs={"is_ties": True})
+        ties_dataset_formatted = ties_dataset.map(
+            format_ratings, fn_kwargs={"is_ties": True}, num_proc=args.num_proc
+        )
         results_ties = []
         for i, batch in enumerate(ties_dataset_formatted):
             if args.debug and i % 10 == 0:
@@ -663,7 +674,9 @@ def main():
             print(f"{subset}: Ties score: {ties_score}")
             results_grouped[subset] = ties_score
         else:
-            subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset)
+            subset_dataset = out_dataset.filter(
+                lambda example: example["subset"] == subset, num_proc=args.num_proc
+            )
             num_correct = sum(subset_dataset["results"])
             num_total = len(subset_dataset["results"])
             print(f"{subset}: {num_correct}/{num_total} ({num_correct/num_total})")
