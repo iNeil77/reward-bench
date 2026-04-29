@@ -45,12 +45,18 @@ class _AtheneRewardModel(nn.Module):
         return next(self.model.parameters()).device
 
     def forward(self, input_ids, attention_mask=None, **_unused):
+        # Do NOT set output_hidden_states=True: the model card's forward did that,
+        # but we only need the final layer's output, and on a 70B sharded model
+        # accelerate.hooks.post_forward migrates the entire 33-layer hidden-state
+        # tuple across devices, which overwhelms the free GPU budget and triggers
+        # cudaErrorLaunchFailure. `last_hidden_state` is always present on
+        # BaseModelOutputWithPast without needing the full hidden-state dump.
         outputs = self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
-            output_hidden_states=True,
+            use_cache=False,
         )
-        hidden_states = outputs.hidden_states[-1]
+        hidden_states = outputs.last_hidden_state
         # Under device_map="auto" sharding, the last hidden state lands on the
         # last stage's device, which may differ from where the head ended up
         # during construction. Move the hidden state to the head's device.
