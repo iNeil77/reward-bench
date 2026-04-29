@@ -40,7 +40,7 @@ from rewardbench import (
     DPO_MODEL_CONFIG,
     DPOInference,
     load_eval_dataset,
-    save_to_hub,
+    save_results_locally,
     torch_dtype_mapping,
 )
 from rewardbench.constants import EXAMPLE_COUNTS, SUBSET_MAPPING
@@ -365,17 +365,11 @@ def main():
         print(results_leaderboard)
 
     ############################
-    # Upload results to hub
+    # Write results locally (unless --do_not_save)
     ############################
     sub_path = "eval-set/" if not args.pref_sets else "pref-sets/"
     if not args.do_not_save:
-        results_path = save_to_hub(
-            results_grouped,
-            args.model + save_modifier,
-            sub_path,
-            args.debug,
-            local_only=True,
-        )
+        results_path = save_results_locally(results_grouped, args.model + save_modifier, sub_path)
         logger.info(f"Wrote reward model results to {results_path}")
 
         # write chosen-rejected with scores
@@ -385,9 +379,7 @@ def main():
         scores_dict["chat_template"] = args.chat_template
         sub_path_scores = "eval-set-scores/" if not args.pref_sets else "pref-sets-scores/"
 
-        scores_path = save_to_hub(
-            scores_dict, args.model + save_modifier, sub_path_scores, args.debug, local_only=True
-        )
+        scores_path = save_results_locally(scores_dict, args.model + save_modifier, sub_path_scores)
         logger.info(f"Wrote chosen-rejected text with scores to {scores_path}")
 
 

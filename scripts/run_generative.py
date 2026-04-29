@@ -30,7 +30,7 @@ import numpy as np
 from fastchat.conversation import get_conv_template
 from transformers import AutoTokenizer
 
-from rewardbench import load_eval_dataset, save_to_hub
+from rewardbench import load_eval_dataset, save_results_locally
 from rewardbench.constants import EXAMPLE_COUNTS, SUBSET_MAPPING
 from rewardbench.generative import (
     ANTHROPIC_MODEL_LIST,
@@ -414,13 +414,7 @@ def main():
 
     sub_path = "eval-set/" if not args.pref_sets else "pref-sets/"
     if not do_not_save:
-        results_path = save_to_hub(
-            results_grouped,
-            model_name,
-            sub_path,
-            args.debug,
-            local_only=True,
-        )
+        results_path = save_results_locally(results_grouped, model_name, sub_path)
         logger.info(f"Wrote reward model results to {results_path}")
 
         ############################
@@ -431,8 +425,7 @@ def main():
         scores_dict["model_type"] = model_type
 
         sub_path_scores = "eval-set-scores/" if not args.pref_sets else "pref-sets-scores/"
-
-        scores_path = save_to_hub(scores_dict, model_name, sub_path_scores, args.debug, local_only=True)
+        scores_path = save_results_locally(scores_dict, model_name, sub_path_scores)
         logger.info(f"Wrote chosen-rejected text with scores to {scores_path}")
 
 

@@ -96,45 +96,24 @@ def check_tokenizer_chat_template(tokenizer):
     return False
 
 
-def save_to_hub(
+def save_results_locally(
     results_dict: Union[Dict, List],
     model_name: str,
     target_path: str,
-    debug: bool = False,
-    local_only: bool = True,
-    best_of_n: bool = False,
 ):
-    """
-    Write results to the local filesystem under ``./results/<target_path><model_name>.json``.
-
-    Note: despite the legacy name, this function never uploads anywhere. All
-    remote-upload functionality has been removed so that runs can't silently
-    depend on HF credentials. The ``local_only``, ``debug``, and ``best_of_n``
-    kwargs are retained for backwards compatibility with existing callers but
-    only ``local_only=False`` (explicitly opting *out* of the local write) has
-    any effect; everything else writes to disk and returns the path.
+    """Write results JSON to ``./results/<target_path><model_name>.json``.
 
     Args:
-        results_dict: dictionary (or list of rows) to serialize as JSON.
-        model_name: name of the model (including organization), used to build
-            the output filename.
+        results_dict: a dict (serialized as a single JSON object) or a list of
+            rows (serialized line-per-line as JSONL-style pretty JSON).
+        model_name: model identifier (including organization), used to build the
+            output filename.
         target_path: sub-directory under ``./results/`` (e.g. ``eval-set/``,
             ``eval-set-scores/``). Usually set by the caller script.
-        debug: retained for backwards compatibility. Has no effect.
-        local_only: if True (default), write the file and return its path. If
-            False, skip the local write and return ``None`` — this is the new
-            "do not save" semantic.
-        best_of_n: retained for backwards compatibility. Has no effect.
 
     Returns:
-        The local path to the JSON file that was written, or ``None`` if
-        ``local_only=False`` (i.e. the caller explicitly opted out of saving).
+        The local path to the JSON file that was written.
     """
-    del debug, best_of_n  # retained for backwards compat; no effect.
-
-    if not local_only:
-        return None
-
     scores_path = f"./results/{target_path}{model_name}.json"
 
     dirname = os.path.dirname(scores_path)

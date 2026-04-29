@@ -44,7 +44,7 @@ from rewardbench import (
     load_bon_dataset_v2,
     process_single_model,
     reroll_and_score_dataset,
-    save_to_hub,
+    save_results_locally,
 )
 
 
@@ -428,38 +428,23 @@ def main():
     ############################
     # Write results to local disk (unless --do_not_save)
     ############################
-    sub_path = "eval-set/"
     if not args.do_not_save:
-        results_path = save_to_hub(
-            results_grouped,
-            model_name,
-            sub_path,
-            args.debug,
-            local_only=True,
-            best_of_n=True,
-        )
+        sub_path = "eval-set/"
+        results_path = save_results_locally(results_grouped, model_name, sub_path)
         logger.info(f"Wrote reward model results to {results_path}")
 
-    # write chosen-rejected with scores
-    if not model_type == "Custom Classifier":  # custom classifiers do not return scores
-        if not args.do_not_save:
+        # write chosen-rejected with scores
+        if not model_type == "Custom Classifier":  # custom classifiers do not return scores
             scores_dict = out_dataset.to_dict()
             scores_dict["model"] = model_name
             scores_dict["model_type"] = model_type
             scores_dict["chat_template"] = chat_template
 
             sub_path_scores = "eval-set-scores/"
-            scores_path = save_to_hub(
-                scores_dict,
-                model_name,
-                sub_path_scores,
-                args.debug,
-                local_only=True,
-                best_of_n=True,
-            )
+            scores_path = save_results_locally(scores_dict, model_name, sub_path_scores)
             logger.info(f"Wrote chosen-rejected text with scores to {scores_path}")
-    else:
-        logger.info("Not saving chosen-rejected text with scores (custom classifier returns no per-row scores)")
+        else:
+            logger.info("Not saving chosen-rejected text with scores (custom classifier returns no per-row scores)")
 
 
 if __name__ == "__main__":

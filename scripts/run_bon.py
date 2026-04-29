@@ -40,7 +40,7 @@ from rewardbench import (
     REWARD_MODEL_CONFIG,
     check_tokenizer_chat_template,
     load_bon_dataset,
-    save_to_hub,
+    save_results_locally,
 )
 
 
@@ -327,34 +327,10 @@ def main():
     if not args.do_not_save:
         sub_path = "best-of-n/"
         paths = [
-            save_to_hub(
-                flatten_data(alpaca_eval_zephyr),
-                args.model,
-                sub_path + "alpaca_eval/zephyr-7b/",
-                args.debug,
-                local_only=True,
-            ),
-            save_to_hub(
-                flatten_data(alpaca_eval_tulu),
-                args.model,
-                sub_path + "alpaca_eval/tulu-13b/",
-                args.debug,
-                local_only=True,
-            ),
-            save_to_hub(
-                flatten_data(mt_bench_zephyr),
-                args.model,
-                sub_path + "mt_bench/zephyr-7b/",
-                args.debug,
-                local_only=True,
-            ),
-            save_to_hub(
-                flatten_data(mt_bench_tulu),
-                args.model,
-                sub_path + "mt_bench/tulu-13/",
-                args.debug,
-                local_only=True,
-            ),
+            save_results_locally(flatten_data(alpaca_eval_zephyr), args.model, sub_path + "alpaca_eval/zephyr-7b/"),
+            save_results_locally(flatten_data(alpaca_eval_tulu), args.model, sub_path + "alpaca_eval/tulu-13b/"),
+            save_results_locally(flatten_data(mt_bench_zephyr), args.model, sub_path + "mt_bench/zephyr-7b/"),
+            save_results_locally(flatten_data(mt_bench_tulu), args.model, sub_path + "mt_bench/tulu-13/"),
         ]
         logger.info("Wrote reward model results to:\n  " + "\n  ".join(paths))
 

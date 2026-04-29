@@ -14,7 +14,7 @@
 import json
 import unittest
 
-from rewardbench import save_to_hub
+from rewardbench import save_results_locally
 
 
 class SaveDataTest(unittest.TestCase):
@@ -26,17 +26,10 @@ class SaveDataTest(unittest.TestCase):
             "alpacaeval-easy": 0.12345,
             "math-prm": 0.54321,
         }
-        _ = save_to_hub(
-            fake_results,
-            model_name,  # must be the same as in the json
-            "eval-set/",
-            True,  # doesn't matter if not pushed to hub
-            local_only=True,
-        )
+        path = save_results_locally(fake_results, model_name, "eval-set/")
 
-        # read results
-        expected_path = "results/eval-set/fake/fake_model.json"
-        with open(expected_path, "r") as f:
+        self.assertEqual(path, "./results/eval-set/fake/fake_model.json")
+        with open(path, "r") as f:
             output = json.load(f)
 
         self.assertAlmostEqual(output["alpacaeval-easy"], 0.12345, places=5)
