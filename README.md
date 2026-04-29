@@ -98,7 +98,7 @@ pip install rewardbench[generative]    # optional: generative models
 
 **One-off usage (no install):**
 ```bash
-uv run --with rewardbench rewardbench --model=your-model
+uv run --with rewardbench rewardbench --model=your-model --do_not_save --trust_remote_code
 ```
 
 ### Development Install
@@ -134,25 +134,29 @@ export HF_TOKEN="your_token_here"
 
 ## Quick Start
 
+> **Recommended flags for external users** (included in every example below):
+> - `--do_not_save`: write results under `results/` locally instead of pushing to AI2's `allenai/reward-bench-*-results` datasets (non-AI2 tokens will get `403 Forbidden` on upload). Applies to `rewardbench`, `run_rm.py`, `run_v2.py`, `run_dpo.py`. RM-Bench and JudgeBench always write locally, so the flag isn't needed there.
+> - `--trust_remote_code`: required for models that ship custom modeling code via `auto_map` (e.g., Qwen/WorldPM, some Nemotron variants). Safe to leave on by default; a no-op for stock architectures.
+
 **Evaluate a reward model:**
 ```bash
-rewardbench --model=OpenAssistant/reward-model-deberta-v3-large-v2
+rewardbench --model=OpenAssistant/reward-model-deberta-v3-large-v2 --do_not_save --trust_remote_code
 ```
 
 **Evaluate on RewardBench 2:**
 ```bash
-python scripts/run_v2.py --model=your-model --batch_size=64
+python scripts/run_v2.py --model=your-model --batch_size=64 --do_not_save --trust_remote_code
 ```
 
 **Evaluate DPO model:**
 ```bash
-rewardbench --model=Qwen/Qwen1.5-0.5B-Chat --ref_model=Qwen/Qwen1.5-0.5B
+rewardbench --model=Qwen/Qwen1.5-0.5B-Chat --ref_model=Qwen/Qwen1.5-0.5B --do_not_save --trust_remote_code
 ```
 
 **With uv (from editable install):**
 ```bash
-uv run rewardbench --model=your-model
-uv run python scripts/run_v2.py --model=your-model
+uv run rewardbench --model=your-model --do_not_save --trust_remote_code
+uv run python scripts/run_v2.py --model=your-model --do_not_save --trust_remote_code
 ```
 
 ---
@@ -166,40 +170,48 @@ The `rewardbench` binary evaluates models on the RewardBench v1 core set.
 **Basic usage:**
 ```bash
 # Standard evaluation
-rewardbench --model=your-model
+rewardbench --model=your-model --do_not_save --trust_remote_code
 
 # With options
 rewardbench \
     --model=your-model \
     --batch_size=32 \
     --num_proc=16 \
-    --attn_implementation=sdpa
+    --attn_implementation=sdpa \
+    --do_not_save \
+    --trust_remote_code
 
 # DPO model
 rewardbench \
     --model=your-dpo-model \
-    --ref_model=base-model
+    --ref_model=base-model \
+    --do_not_save \
+    --trust_remote_code
 
 # Custom dataset
 rewardbench \
     --model=your-model \
     --dataset=allenai/ultrafeedback_binarized_cleaned \
-    --split=test_gen
+    --split=test_gen \
+    --do_not_save \
+    --trust_remote_code
 
 # Local JSON dataset
 rewardbench \
     --model=your-model \
     --dataset=/path/to/dataset.jsonl \
-    --load_json
+    --load_json \
+    --do_not_save \
+    --trust_remote_code
 ```
 
 **With uv:**
 ```bash
 # From editable install
-uv run rewardbench --model=your-model
+uv run rewardbench --model=your-model --do_not_save --trust_remote_code
 
 # One-off (no install)
-uv run --with rewardbench rewardbench --model=your-model
+uv run --with rewardbench rewardbench --model=your-model --do_not_save --trust_remote_code
 ```
 
 **Help:**
@@ -213,26 +225,32 @@ RewardBench 2 includes best-of-N and Ties evaluation. Use `scripts/run_v2.py`:
 
 ```bash
 # Basic usage
-python scripts/run_v2.py --model=your-model
+python scripts/run_v2.py --model=your-model --do_not_save --trust_remote_code
 
 # With performance tuning
 python scripts/run_v2.py \
     --model=your-model \
     --batch_size=128 \
     --num_proc=16 \
-    --dataloader_num_workers=8
+    --dataloader_num_workers=8 \
+    --do_not_save \
+    --trust_remote_code
 
 # With Flash Attention 2 (requires flash-attn extra)
 python scripts/run_v2.py \
     --model=your-model \
-    --attn_implementation=flash_attention_2
+    --attn_implementation=flash_attention_2 \
+    --do_not_save \
+    --trust_remote_code
 
 # Advanced reward model script (more control)
 python scripts/run_rm.py \
     --model=your-model \
     --batch_size=16 \
     --num_proc=32 \
-    --dataloader_num_workers=4
+    --dataloader_num_workers=4 \
+    --do_not_save \
+    --trust_remote_code
 ```
 
 **Config reference:**
@@ -244,24 +262,29 @@ See [eval_configs.yaml](scripts/configs/eval_configs.yaml) for model-specific co
 
 The dataset JSON files are bundled under [`data/rm-bench/`](data/rm-bench/), so evaluation works out of the box.
 
+`run_rm_bench.py` always writes results locally under `results/rm-bench/`, so `--do_not_save` isn't needed. `--trust_remote_code` is still recommended if your model ships custom code via `auto_map`.
+
 ```bash
 # Full eval on all domains
 uv run python scripts/run_rm_bench.py \
     --model=your-model \
     --datapath=data/rm-bench/total_dataset.json \
-    --batch_size=8
+    --batch_size=8 \
+    --trust_remote_code
 
 # Single domain (chat / code / math / safety-refuse / safety-response)
 uv run python scripts/run_rm_bench.py \
     --model=your-model \
     --datapath=data/rm-bench/code_filtered.json \
-    --batch_size=16
+    --batch_size=16 \
+    --trust_remote_code
 
 # Quick smoke test (10 examples per style variant)
 uv run python scripts/run_rm_bench.py \
     --model=your-model \
     --datapath=data/rm-bench/total_dataset.json \
-    --debug
+    --debug \
+    --trust_remote_code
 ```
 
 **Outputs:**
@@ -274,24 +297,29 @@ uv run python scripts/run_rm_bench.py \
 
 The dataset JSON files are bundled under [`data/judge-bench/`](data/judge-bench/), so evaluation works out of the box.
 
+`run_judge_bench.py` always writes results locally under `results/judge-bench/`, so `--do_not_save` isn't needed. `--trust_remote_code` is still recommended if your model ships custom code via `auto_map`.
+
 ```bash
 # Full eval across all 4 categories
 uv run python scripts/run_judge_bench.py \
     --model=your-model \
     --datapath=data/judge-bench/total_dataset.json \
-    --batch_size=8
+    --batch_size=8 \
+    --trust_remote_code
 
 # Single category (knowledge / reasoning / math / coding)
 uv run python scripts/run_judge_bench.py \
     --model=your-model \
     --datapath=data/judge-bench/coding_filtered.json \
-    --batch_size=16
+    --batch_size=16 \
+    --trust_remote_code
 
 # Quick smoke test (10 examples)
 uv run python scripts/run_judge_bench.py \
     --model=your-model \
     --datapath=data/judge-bench/total_dataset.json \
-    --debug
+    --debug \
+    --trust_remote_code
 ```
 
 **Outputs:**
@@ -304,18 +332,18 @@ Evaluate LLM-based reward models. Requires `[generative]` extra.
 
 **Rankings-based (default, compares 4 responses):**
 ```bash
-python scripts/run_generative_v2.py --model=gpt-4
-python scripts/run_generative_v2.py --model=meta-llama/Llama-3-70b-chat-hf
+python scripts/run_generative_v2.py --model=gpt-4 --do_not_save --trust_remote_code
+python scripts/run_generative_v2.py --model=meta-llama/Llama-3-70b-chat-hf --do_not_save --trust_remote_code
 ```
 
 **Ratings-based (scores each response separately):**
 ```bash
-python scripts/run_generative_v2.py --model=your-model --score_w_ratings
+python scripts/run_generative_v2.py --model=your-model --score_w_ratings --do_not_save --trust_remote_code
 ```
 
 **Using the CLI:**
 ```bash
-rewardbench-gen --model=gpt-3.5-turbo-0125
+rewardbench-gen --model=gpt-3.5-turbo-0125 --do_not_save --trust_remote_code
 ```
 
 **Supported providers:**
@@ -336,13 +364,17 @@ Evaluate Direct Preference Optimization models:
 rewardbench \
     --model=stabilityai/stablelm-zephyr-3b \
     --ref_model=stabilityai/stablelm-3b-4e1t \
-    --batch_size=64
+    --batch_size=64 \
+    --do_not_save \
+    --trust_remote_code
 
 # Via script (more control)
 python scripts/run_dpo.py \
     --model=your-dpo-model \
     --ref_model=base-model \
-    --batch_size=8
+    --batch_size=8 \
+    --do_not_save \
+    --trust_remote_code
 ```
 
 ---
@@ -381,25 +413,33 @@ python scripts/run_v2.py \
     --model=your-model \
     --batch_size=128 \
     --num_proc=16 \
-    --dataloader_num_workers=8
+    --dataloader_num_workers=8 \
+    --do_not_save \
+    --trust_remote_code
 
 # Maximum speed with Flash Attention 2
 python scripts/run_v2.py \
     --model=your-model \
     --batch_size=128 \
-    --attn_implementation=flash_attention_2
+    --attn_implementation=flash_attention_2 \
+    --do_not_save \
+    --trust_remote_code
 
 # Debugging (single-threaded)
 python scripts/run_v2.py \
     --model=your-model \
     --batch_size=32 \
     --num_proc=1 \
-    --dataloader_num_workers=0
+    --dataloader_num_workers=0 \
+    --do_not_save \
+    --trust_remote_code
 
 # Older GPUs (use float16)
 python scripts/run_v2.py \
     --model=your-model \
-    --torch_dtype=float16
+    --torch_dtype=float16 \
+    --do_not_save \
+    --trust_remote_code
 ```
 
 ---

@@ -18,15 +18,19 @@ uv sync --extra vllm
 uv sync --extra generative
 
 # Run the CLI binary
-uv run rewardbench --model=your-model
+uv run rewardbench --model=your-model --do_not_save --trust_remote_code
 
 # Run scripts
-uv run python scripts/run_v2.py --model=your-model
-uv run python scripts/run_rm.py --model=your-model
+uv run python scripts/run_v2.py --model=your-model --do_not_save --trust_remote_code
+uv run python scripts/run_rm.py --model=your-model --do_not_save --trust_remote_code
 
 # One-off usage without install (uv handles dependencies automatically)
-uv run --with rewardbench rewardbench --model=your-model
+uv run --with rewardbench rewardbench --model=your-model --do_not_save --trust_remote_code
 ```
+
+Flags shown in every example above:
+- `--do_not_save`: write results to `results/` locally instead of pushing to AI2's private HF result datasets (external users lack upload permission and will get `403 Forbidden`). Applies to `rewardbench`, `run_rm.py`, `run_v2.py`, `run_dpo.py`, `run_generative*.py`. Not needed for `run_rm_bench.py` / `run_judge_bench.py` (they always write locally).
+- `--trust_remote_code`: required for models that ship custom modeling code via `auto_map` (e.g., `Qwen/WorldPM-*`). Safe to leave on by default; no-op for stock architectures.
 
 ## Entry Points
 
@@ -122,7 +126,7 @@ The codebase now supports both transformers 4.x and 5.x. Key changes for 5.x com
 To test with transformers 5.x:
 ```bash
 pip install "transformers>=5.0"
-rewardbench --model=<model-path> --batch-size=32
+rewardbench --model=<model-path> --batch-size=32 --do_not_save --trust_remote_code
 ```
 
 **Note**: Weight loading in transformers 5.x is optimized with safetensors. Ensure your models use `.safetensors` format for best performance. PyTorch `.bin` files will still work but load slower.
