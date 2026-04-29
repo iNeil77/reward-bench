@@ -179,4 +179,5 @@ beaker_configs/auto_created
 hf_snapshot_evals/
 data/*
 !data/rm-bench/
+!data/judge-bench/
 output/
