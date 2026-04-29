@@ -51,6 +51,11 @@ class _AtheneRewardModel(nn.Module):
             output_hidden_states=True,
         )
         hidden_states = outputs.hidden_states[-1]
+        # Under device_map="auto" sharding, the last hidden state lands on the
+        # last stage's device, which may differ from where the head ended up
+        # during construction. Move the hidden state to the head's device.
+        if hidden_states.device != self.v_head.weight.device:
+            hidden_states = hidden_states.to(self.v_head.weight.device)
         rewards = self.v_head(hidden_states).squeeze(-1)  # (B, T)
 
         # Pool at the last CLS_ID position in each row (matches the model card's code exactly).
@@ -62,7 +67,8 @@ class _AtheneRewardModel(nn.Module):
                     "Athene pooling requires a CLS token (id 128003) in every input. "
                     "Did AthenePipeline's preprocessing run?"
                 )
-            scores.append(rewards[i, c_inds[-1].item()])
+            # c_inds is on input_ids' device; pull a python int so it's device-agnostic.
+            scores.append(rewards[i, int(c_inds[-1].item())])
         return torch.stack(scores)
 
 
@@ -88,8 +94,15 @@ def build_athene_model(
     )
 
     model = _AtheneRewardModel(backbone=backbone, hidden_size=config.hidden_size)
-    last_param = list(backbone.parameters())[-1]
-    model.v_head = model.v_head.to(device=last_param.device, dtype=last_param.dtype)
+    # Place v_head on the same device as the backbone's final norm layer, which is where
+    # the last hidden state is produced under device_map="auto" sharding. Fall back to
+    # the last parameter's device for backbones that don't expose a `.norm` attribute.
+    final_norm = getattr(backbone, "norm", None)
+    if final_norm is not None and hasattr(final_norm, "weight"):
+        head_ref = final_norm.weight
+    else:
+        head_ref = list(backbone.parameters())[-1]
+    model.v_head = model.v_head.to(device=head_ref.device, dtype=head_ref.dtype)
 
     _load_v_head(model, model_name_or_path)
     model.eval()
