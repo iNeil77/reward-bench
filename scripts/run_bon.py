@@ -43,13 +43,6 @@ from rewardbench import (
     save_to_hub,
 )
 
-# get token from HF_TOKEN env variable, but if it doesn't exist pass none
-HF_TOKEN = os.getenv("HF_TOKEN", None)
-# this is necessary to automatically log in when running this script in docker/batch beaker jobs
-if HF_TOKEN is not None:
-    from huggingface_hub._login import _login
-
-    _login(token=HF_TOKEN, add_to_git_credential=False)
 
 
 def get_args():
@@ -68,7 +61,7 @@ def get_args():
     parser.add_argument(
         "--trust_remote_code", action="store_true", default=False, help="directly load model instead of pipeline"
     )
-    parser.add_argument("--do_not_save", action="store_true", help="do not save results to hub (for debugging)")
+    parser.add_argument("--do_not_save", action="store_true", help="Skip writing results to disk (accuracy still prints to stdout).")
     parser.add_argument("--batch_size", type=int, default=64, help="batch size for inference")
     parser.add_argument("--best_of", type=int, default=16, help="number of best of n to select from")
     parser.add_argument(
@@ -329,41 +322,41 @@ def main():
         return [dict(zip(dictionary.keys(), values)) for values in zip(*dictionary.values())]
 
     ############################
-    # Upload results to hub
+    # Write results locally
     ############################
-    sub_path = "best-of-n/"
-    results_url = save_to_hub(
-        flatten_data(alpaca_eval_zephyr),
-        args.model,
-        sub_path + "alpaca_eval/zephyr-7b/",
-        args.debug,
-        local_only=args.do_not_save,
-    )
-    results_url_2 = save_to_hub(
-        flatten_data(alpaca_eval_tulu),
-        args.model,
-        sub_path + "alpaca_eval/tulu-13b/",
-        args.debug,
-        local_only=args.do_not_save,
-    )
-    results_url_3 = save_to_hub(
-        flatten_data(mt_bench_zephyr),
-        args.model,
-        sub_path + "mt_bench/zephyr-7b/",
-        args.debug,
-        local_only=args.do_not_save,
-    )
-    results_url_4 = save_to_hub(
-        flatten_data(mt_bench_tulu),
-        args.model,
-        sub_path + "mt_bench/tulu-13/",
-        args.debug,
-        local_only=args.do_not_save,
-    )
     if not args.do_not_save:
-        logger.info(
-            f"Uploaded reward model results to {results_url}, {results_url_2}, {results_url_3}, {results_url_4}"
-        )
+        sub_path = "best-of-n/"
+        paths = [
+            save_to_hub(
+                flatten_data(alpaca_eval_zephyr),
+                args.model,
+                sub_path + "alpaca_eval/zephyr-7b/",
+                args.debug,
+                local_only=True,
+            ),
+            save_to_hub(
+                flatten_data(alpaca_eval_tulu),
+                args.model,
+                sub_path + "alpaca_eval/tulu-13b/",
+                args.debug,
+                local_only=True,
+            ),
+            save_to_hub(
+                flatten_data(mt_bench_zephyr),
+                args.model,
+                sub_path + "mt_bench/zephyr-7b/",
+                args.debug,
+                local_only=True,
+            ),
+            save_to_hub(
+                flatten_data(mt_bench_tulu),
+                args.model,
+                sub_path + "mt_bench/tulu-13/",
+                args.debug,
+                local_only=True,
+            ),
+        ]
+        logger.info("Wrote reward model results to:\n  " + "\n  ".join(paths))
 
 
 if __name__ == "__main__":

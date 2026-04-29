@@ -31,7 +31,6 @@ from datasets import (
     load_dataset,
     load_from_disk,
 )
-from huggingface_hub import HfApi
 from transformers import PreTrainedTokenizer
 
 # fschat is optional - only needed for v1 scripts and --chat_template flag
@@ -43,18 +42,14 @@ if TYPE_CHECKING:
 
 from rewardbench.models import REWARD_MODEL_CONFIG
 
-# HuggingFace Hub locations
+# HuggingFace Hub dataset locations used for *downloading* evaluation data.
+# There is intentionally no upload endpoint here — results are always written
+# to the local filesystem, never pushed.
 CORE_EVAL_SET = "allenai/reward-bench"
 EXTRA_PREF_SETS = "allenai/pref-test-sets"
 BON_CANDIDATES = "ai2-adapt-dev/HERM_BoN_candidates"  # private until officially supported
-EVAL_REPO = "allenai/reward-bench-results"  # data repo to upload results
 
 CORE_EVAL_SET_V2 = "allenai/reward-bench-2"
-EVAL_REPO_V2 = "allenai/reward-bench-2-results"  # data repo to upload results
-
-# get token from HF_TOKEN env variable, but if it doesn't exist pass none
-HF_TOKEN = os.getenv("HF_TOKEN", None)
-api = HfApi(token=HF_TOKEN)
 
 
 def torch_dtype_mapping(dtype_str):
@@ -106,25 +101,40 @@ def save_to_hub(
     model_name: str,
     target_path: str,
     debug: bool = False,
-    local_only: bool = False,
+    local_only: bool = True,
     best_of_n: bool = False,
 ):
     """
-    Utility for saving results in dict to the hub in programatic organization.
+    Write results to the local filesystem under ``./results/<target_path><model_name>.json``.
+
+    Note: despite the legacy name, this function never uploads anywhere. All
+    remote-upload functionality has been removed so that runs can't silently
+    depend on HF credentials. The ``local_only``, ``debug``, and ``best_of_n``
+    kwargs are retained for backwards compatibility with existing callers but
+    only ``local_only=False`` (explicitly opting *out* of the local write) has
+    any effect; everything else writes to disk and returns the path.
 
     Args:
-        results_dict: dictionary of results to save.
-        model_name: name of the model (including organization).
-        target_path: path to save the results in the hub. Usually set in script (e.g. eval-set/, eval-set-scores/).
-        debug: if True, save to debug repo on HF.
-        local_only: if True, do not save to HF (for most non-AI2 users).
-        best_of_n: if True, save to version 2 dataset results repo on HF.
+        results_dict: dictionary (or list of rows) to serialize as JSON.
+        model_name: name of the model (including organization), used to build
+            the output filename.
+        target_path: sub-directory under ``./results/`` (e.g. ``eval-set/``,
+            ``eval-set-scores/``). Usually set by the caller script.
+        debug: retained for backwards compatibility. Has no effect.
+        local_only: if True (default), write the file and return its path. If
+            False, skip the local write and return ``None`` — this is the new
+            "do not save" semantic.
+        best_of_n: retained for backwards compatibility. Has no effect.
 
     Returns:
-        scores_url: URL to the uploaded scores if uploaded, otherwise the local
-            path where the results JSON was written (when ``local_only=True`` or
-            ``debug=True``). Never ``None``, so callers can always log the location.
+        The local path to the JSON file that was written, or ``None`` if
+        ``local_only=False`` (i.e. the caller explicitly opted out of saving).
     """
+    del debug, best_of_n  # retained for backwards compat; no effect.
+
+    if not local_only:
+        return None
+
     scores_path = f"./results/{target_path}{model_name}.json"
 
     dirname = os.path.dirname(scores_path)
@@ -136,7 +146,7 @@ def save_to_hub(
 
     with open(scores_path, "w") as f:
         if isinstance(results_dict, Dict):
-            dumped = json.dumps(results_dict, indent=4, sort_keys=True)  # nol removed , default=str
+            dumped = json.dumps(results_dict, indent=4, sort_keys=True)
             f.write(dumped)
         # else, dump each row in list
         else:
@@ -144,17 +154,7 @@ def save_to_hub(
                 dumped = json.dumps(record, indent=4, sort_keys=True) + "\n"
                 f.write(dumped)
 
-    if not local_only and not debug:
-        scores_url = api.upload_file(
-            path_or_fileobj=scores_path,
-            path_in_repo=target_path + f"{model_name}.json",
-            repo_id=EVAL_REPO if not best_of_n else EVAL_REPO_V2,  # push to correct results repo
-            repo_type="dataset",
-            commit_message=f"Add chosen-rejected text with scores for  model {model_name}",
-        )
-        return scores_url
-    else:
-        return scores_path
+    return scores_path
 
 
 def map_conversations_testsets(example):

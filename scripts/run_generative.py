@@ -44,13 +44,6 @@ from rewardbench.generative import (
 )
 from rewardbench.utils import calculate_scores_per_section
 
-# get token from HF_TOKEN env variable, but if it doesn't exist pass none
-HF_TOKEN = os.getenv("HF_TOKEN", None)
-# this is necessary to automatically log in when running this script in docker/batch beaker jobs
-if HF_TOKEN is not None:
-    from huggingface_hub._login import _login
-
-    _login(token=HF_TOKEN, add_to_git_credential=False)
 
 
 def get_args():
@@ -75,7 +68,7 @@ def get_args():
     parser.add_argument("--num_gpus", type=int, default=1, help="number of gpus to use, for multi-node vllm")
     parser.add_argument("--vllm_gpu_util", type=float, default=0.9, help="gpu utilization for vllm")
     # parser.add_argument("--vllm_max_seq_length", type=int, default=None, help="max sequence length for vllm")
-    parser.add_argument("--do_not_save", action="store_true", help="do not save results to hub (for debugging)")
+    parser.add_argument("--do_not_save", action="store_true", help="Skip writing results to disk (accuracy still prints to stdout).")
     parser.add_argument(
         "--pref_sets", action="store_true", help="run on common preference sets instead of our custom eval set"
     )
@@ -420,33 +413,27 @@ def main():
     do_not_save = args.do_not_save or args.score_w_ratings
 
     sub_path = "eval-set/" if not args.pref_sets else "pref-sets/"
-    results_url = save_to_hub(
-        results_grouped,
-        model_name,
-        sub_path,
-        args.debug,
-        local_only=do_not_save,
-    )
     if not do_not_save:
-        logger.info(f"Uploaded reward model results to {results_url}")
+        results_path = save_to_hub(
+            results_grouped,
+            model_name,
+            sub_path,
+            args.debug,
+            local_only=True,
+        )
+        logger.info(f"Wrote reward model results to {results_path}")
 
-    logger.info("Not uploading chosen-rejected text with scores due to model compatibility")
+        ############################
+        # Save per-prompt results
+        ############################
+        scores_dict = out_dataset.to_dict()
+        scores_dict["model"] = model_name
+        scores_dict["model_type"] = model_type
 
-    ############################
-    # Save per-prompt results to hub
-    ############################
-    # create new json with scores and upload
-    scores_dict = out_dataset.to_dict()
-    scores_dict["model"] = model_name
-    scores_dict["model_type"] = model_type
+        sub_path_scores = "eval-set-scores/" if not args.pref_sets else "pref-sets-scores/"
 
-    sub_path_scores = "eval-set-scores/" if not args.pref_sets else "pref-sets-scores/"
-
-    scores_url = save_to_hub(scores_dict, model_name, sub_path_scores, args.debug, local_only=args.do_not_save)
-    if args.do_not_save:
-        logger.info(f"Wrote chosen-rejected text with scores locally to {scores_url}")
-    else:
-        logger.info(f"Uploaded chosen-rejected text with scores to {scores_url}")
+        scores_path = save_to_hub(scores_dict, model_name, sub_path_scores, args.debug, local_only=True)
+        logger.info(f"Wrote chosen-rejected text with scores to {scores_path}")
 
 
 if __name__ == "__main__":

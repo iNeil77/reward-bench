@@ -192,11 +192,16 @@ uv sync --extra generative
 
 vLLM has specific platform requirements. On unsupported platforms (like aarch64/ARM), you may need custom wheels. See the main CLAUDE.md in `~/dev/` for DGX Spark-specific instructions.
 
-## AI2 Beaker Scripts
+## Saving results
 
-The following scripts are AI2-internal and require access to Beaker infrastructure:
-- `scripts/submit_eval_jobs.py`
-- `scripts/submit_eval_jobs_v2.py`
-- `scripts/submit_generative_jobs.py`
+All runners write results to the local filesystem only — no HuggingFace Hub
+uploads, no leaderboard submission, no Weights & Biases logging. The
+`--do_not_save` flag on every runner simply *skips* the local write:
 
-External users should use the `run_*.py` scripts directly instead. All Beaker-specific functionality has been removed from the main evaluation scripts.
+- default (no flag): results JSON/JSONL written under `./results/...`
+- `--do_not_save`: no disk writes at all (accuracy still prints to stdout)
+
+This keeps evaluation runs self-contained: no HF token required for uploads,
+no risk of a 403 at the end of a long eval, no writes to shared infrastructure.
+`HF_TOKEN` is still picked up by `huggingface_hub` automatically for
+*downloading* gated models/datasets.

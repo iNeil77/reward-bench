@@ -47,13 +47,6 @@ from rewardbench import (
     save_to_hub,
 )
 
-# get token from HF_TOKEN env variable, but if it doesn't exist pass none
-HF_TOKEN = os.getenv("HF_TOKEN", None)
-# this is necessary to automatically log in when running this script in docker/batch beaker jobs
-if HF_TOKEN is not None:
-    from huggingface_hub._login import _login
-
-    _login(token=HF_TOKEN, add_to_git_credential=False)
 
 
 def calculate_subset_score(subset_data):
@@ -94,7 +87,7 @@ def get_args():
     parser.add_argument(
         "--trust_remote_code", action="store_true", default=False, help="directly load model instead of pipeline"
     )
-    parser.add_argument("--do_not_save", action="store_true", help="do not save results to hub (for debugging)")
+    parser.add_argument("--do_not_save", action="store_true", help="Skip writing results to disk (accuracy still prints to stdout).")
     parser.add_argument("--batch_size", type=int, default=64, help="batch size for inference")
     parser.add_argument("--max_length", type=int, default=2560, help="Max length of RM inputs (passed to pipeline)")
     parser.add_argument("--debug", action="store_true", help="Debug on small set of examples")
@@ -433,45 +426,40 @@ def main():
         enable_progress_bar()
 
     ############################
-    # Upload results to hub
+    # Write results to local disk (unless --do_not_save)
     ############################
     sub_path = "eval-set/"
     if not args.do_not_save:
-        results_url = save_to_hub(
+        results_path = save_to_hub(
             results_grouped,
             model_name,
             sub_path,
             args.debug,
-            local_only=args.do_not_save,
+            local_only=True,
             best_of_n=True,
         )
-    if not args.do_not_save:
-        logger.info(f"Uploaded reward model results to {results_url}")
+        logger.info(f"Wrote reward model results to {results_path}")
 
-    # upload chosen-rejected with scores
+    # write chosen-rejected with scores
     if not model_type == "Custom Classifier":  # custom classifiers do not return scores
-        # create new json with scores and upload
-        scores_dict = out_dataset.to_dict()
-        scores_dict["model"] = model_name
-        scores_dict["model_type"] = model_type
-        scores_dict["chat_template"] = chat_template
-
-        sub_path_scores = "eval-set-scores/"
-
-        scores_url = save_to_hub(
-            scores_dict,
-            model_name,
-            sub_path_scores,
-            args.debug,
-            local_only=args.do_not_save,
-            best_of_n=True,
-        )
         if not args.do_not_save:
-            logger.info(f"Uploaded chosen-rejected text with scores to {scores_url}")
-        else:
-            logger.info(f"Wrote chosen-rejected text with scores locally to {scores_url}")
+            scores_dict = out_dataset.to_dict()
+            scores_dict["model"] = model_name
+            scores_dict["model_type"] = model_type
+            scores_dict["chat_template"] = chat_template
+
+            sub_path_scores = "eval-set-scores/"
+            scores_path = save_to_hub(
+                scores_dict,
+                model_name,
+                sub_path_scores,
+                args.debug,
+                local_only=True,
+                best_of_n=True,
+            )
+            logger.info(f"Wrote chosen-rejected text with scores to {scores_path}")
     else:
-        logger.info("Not uploading chosen-rejected text with scores due to model compatibility")
+        logger.info("Not saving chosen-rejected text with scores (custom classifier returns no per-row scores)")
 
 
 if __name__ == "__main__":

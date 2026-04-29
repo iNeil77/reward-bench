@@ -18,21 +18,14 @@ import json
 import logging
 import os
 import sys
-import time
 from dataclasses import dataclass
-from importlib.metadata import distributions
-from pprint import pformat
 from typing import Dict, List, Literal, Optional, Union
 
 import numpy as np
 import torch
 import transformers
-import wandb
 from accelerate import Accelerator
 from accelerate.logging import get_logger
-from datasets import Dataset
-from huggingface_hub import EvalResult, HfApi, ModelCard, ModelCardData
-from huggingface_hub.repocard import RepoCard
 from tqdm import tqdm
 from transformers import AutoTokenizer, BitsAndBytesConfig, HfArgumentParser
 
@@ -70,19 +63,9 @@ class Args:
     prioritize_scoring: bool = False
     """Prioritize scoring of the messages key, rather than accuracy rankings."""
 
-    # hf saving args
-    push_results_to_hub: bool = False
-    """Push distribution of scores and labels to randomly generated HuggingFace dataset."""
-    upload_model_metadata_to_hf: bool = False
-    """Upload metadata to Hugging Face Hub."""
-    hf_entity: Optional[str] = None
-    """The Hugging Face entity to push results to."""
-    hf_name: Optional[str] = None
-    """[Default is random] The Hugging Face dataset name to push results to."""
-
-    # wandb args
-    wandb_run: Optional[str] = None
-    """The wandb run to extract model and revision from."""
+    # saving args
+    do_not_save: bool = False
+    """Skip writing results to disk (useful for smoke testing)."""
 
     # inference args
     batch_size: int = 8
@@ -127,84 +110,6 @@ def save_jsonl(save_filename: str, table: Dict[str, List[Union[int, float, str]]
             outfile.write("\n")
 
 
-def push_results_to_hub(args, results, accuracy=None):
-    """
-    Push dataset to Hugging Face Hub.
-
-    Args:
-        args: Argument object with the following attributes:
-            - hf_entity: Hugging Face entity (e.g., username or organization).
-            - hf_name: ID of the repository to create or use.
-    """
-    api = HfApi()
-
-    if args.hf_entity is None:
-        args.hf_entity = api.whoami()["name"]
-
-    timestamp = time.strftime("%H%M%d%m%y")
-    # Generate default hf_name if not set
-    if not args.hf_name:
-        args.hf_name = f"rewardbench_eval_{timestamp}"
-
-    full_repo_id = f"{args.hf_entity}/{args.hf_name}"
-
-    # Create repository on Hugging Face Hub
-    api.create_repo(full_repo_id, repo_type="dataset", exist_ok=True)
-
-    # Print and prepare the repository URL
-    repo_full_url = f"https://huggingface.co/datasets/{full_repo_id}"
-
-    # Generate the command that was run
-    run_command = " ".join(["python"] + sys.argv)
-
-    # Get package versions as a dictionary
-    package_versions = {dist.metadata["Name"]: dist.version for dist in distributions()}
-
-    # If accuracy is provided, create a string adding it to the results
-    if accuracy is not None:
-        accuracy_str = f"Accuracy: {accuracy}"
-    else:
-        accuracy_str = ""
-
-    # Create and push a repo card
-    rm_card = RepoCard(
-        content=f"""\
-# {args.hf_name}: RewardBench CLI Eval. Outputs
-
-See https://github.com/allenai/reward-bench for more details
-
-Built with the `rewardbench` CLI tool.
-{accuracy_str}
-
-Command used to run:
-```
-{run_command}
-```
-
-## Configs
-```
-args: {pformat(vars(args))}
-```
-
-## Package Versions
-```
-{pformat(package_versions)}
-```
-"""
-    )
-    rm_card.push_to_hub(
-        full_repo_id,
-        repo_type="dataset",
-    )
-    print(f"Pushed to {repo_full_url}")
-
-    # Upload the dataset (after to add metadata to card)
-    data_to_upload = Dataset.from_dict(results)
-    data_to_upload.push_to_hub(full_repo_id)
-
-    return full_repo_id
-
-
 def main():
     parser = HfArgumentParser((Args))
     rewardbench(*parser.parse_args_into_dataclasses())
@@ -213,10 +118,6 @@ def main():
 # Secondary function structure needed to accomodate HuggingFace Args with CLI binding
 def rewardbench(args: Args):
     torch_dtype = None
-    if args.wandb_run is not None:
-        wandb_run = wandb.Api().run(args.wandb_run)
-        args.model = wandb_run.config["hf_name"]
-        args.revision = wandb_run.config["hf_repo_revision"]
 
     ###############
     # Setup logging
@@ -576,9 +477,11 @@ def rewardbench(args: Args):
     for col in metadata.column_names:
         combined_data[col] = metadata[col]
 
-    # Save combined scores and metadata to JSONL
-    scores_output_path = os.path.join(args.output_dir, f"{args.model}_outputs.jsonl")
-    save_jsonl(scores_output_path, combined_data)
+    # Save combined scores and metadata to JSONL (skip entirely with --do_not_save)
+    if not args.do_not_save:
+        scores_output_path = os.path.join(args.output_dir, f"{args.model}_outputs.jsonl")
+        save_jsonl(scores_output_path, combined_data)
+        logger.info(f"Wrote combined scores to {scores_output_path}")
 
     ############################
     # the rest is just for preferences (accuracies)
@@ -618,15 +521,6 @@ def rewardbench(args: Args):
         ############################
         # save scores
         ############################
-        # save score in json to args.output_dir + args.model + ".json"
-        output_path = args.output_dir + args.model + ".json"
-        dirname = os.path.dirname(output_path)
-        os.makedirs(dirname, exist_ok=True)
-
-        # remove old data
-        if os.path.exists(output_path):
-            os.remove(output_path)
-
         final_results = {
             "accuracy": accuracy,
             "num_prompts": len(results),
@@ -636,97 +530,28 @@ def rewardbench(args: Args):
             "chat_template": args.chat_template,
             "extra_results": results_grouped if args.dataset == "allenai/reward-bench" else None,
         }
-        with open(output_path, "w") as f:
-            json.dump(final_results, f)
 
-        if args.wandb_run is not None:
-            for key in final_results:
-                wandb_run.summary[f"rewardbench/{key}"] = final_results[key]
-            wandb_run.update()
-            print(f"Logged metrics to {wandb_run.url}")
+        if not args.do_not_save:
+            # save score json to args.output_dir + args.model + ".json"
+            output_path = args.output_dir + args.model + ".json"
+            dirname = os.path.dirname(output_path)
+            os.makedirs(dirname, exist_ok=True)
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            with open(output_path, "w") as f:
+                json.dump(final_results, f)
+            logger.info(f"Wrote results summary to {output_path}")
 
         # if save_all is passed, save a large jsonl with all scores_chosen, scores_rejected
-        if args.save_all:
+        if args.save_all and not args.do_not_save:
             output_path = args.output_dir + args.model + "_all.jsonl"
             dirname = os.path.dirname(output_path)
             os.makedirs(dirname, exist_ok=True)
-
-            # remove old data
             if os.path.exists(output_path):
                 os.remove(output_path)
-
             with open(output_path, "w") as f:
                 for chosen, rejected in zip(scores_chosen, scores_rejected):
                     f.write(json.dumps({"chosen": chosen, "rejected": rejected}) + "\n")
-
-        ############################
-        # Upload metadata to Hugging Face Hub
-        ############################
-        if args.upload_model_metadata_to_hf:
-            logger.info("*** Uploading metadata to Hugging Face Hub ***")
-            try:
-                # Initialize ModelCardData with basic metadata
-                card_data = ModelCardData(
-                    language="en",
-                    model_name=args.model,
-                    eval_results=[
-                        EvalResult(
-                            task_type="preference_evaluation",
-                            dataset_type=args.dataset,
-                            dataset_name=args.dataset.split("/")[-1],  # Assuming dataset ID is like 'owner/dataset'
-                            metric_type="accuracy",
-                            metric_value=accuracy,
-                        )
-                    ],
-                )
-
-                # If there are extra results (per subset), add them as separate EvalResults
-                if args.dataset == "allenai/reward-bench" and results_grouped:
-                    for section, section_accuracy in results_section.items():
-                        print(f"Adding section {section} with accuracy {section_accuracy}")
-                        section_eval = EvalResult(
-                            task_type="preference_evaluation",
-                            dataset_type=section.replace(" ", "_"),
-                            dataset_name=section,
-                            metric_type="accuracy",
-                            metric_value=section_accuracy,
-                        )
-                        card_data.eval_results.append(section_eval)
-
-                    for subset, subset_accuracy in results_grouped.items():
-                        print(f"Adding subset {subset} with accuracy {subset_accuracy}")
-                        subset_eval = EvalResult(
-                            task_type="preference_evaluation",
-                            dataset_type=subset,
-                            dataset_name=subset,
-                            metric_type="accuracy",
-                            metric_value=subset_accuracy,
-                        )
-                        card_data.eval_results.append(subset_eval)
-
-                # Create a ModelCard
-                card = ModelCard.from_template(
-                    card_data,
-                    model_id=args.model,
-                )
-
-                # Push the updated ModelCard to the Hugging Face Hub
-                card.push_to_hub(
-                    args.model, revision=args.revision, commit_message="Update evaluation results via RewardBench"
-                )
-                logger.info(f"Successfully pushed updated ModelCard to Hugging Face Hub for {args.model}")
-            except Exception as e:
-                logger.error(f"Failed to upload metadata to Hugging Face Hub: {e}")
-                logger.info("(The most common issue is a model you do not have write permissions on).")
-    else:
-        accuracy = None
-
-    ############################
-    # Upload results to HF (as dataset)
-    ############################
-    if args.push_results_to_hub:
-        hf_repo = push_results_to_hub(args, combined_data, accuracy=accuracy)
-        logger.info(f"Pushed results to Hugging Face Hub for https://huggingface.co/datasets/{hf_repo}")
 
 
 if __name__ == "__main__":

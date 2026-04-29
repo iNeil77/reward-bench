@@ -69,12 +69,6 @@ from rewardbench import (
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
-# get token from HF_TOKEN env variable, but if it doesn't exist pass none
-HF_TOKEN = os.getenv("HF_TOKEN", None)
-if HF_TOKEN is not None:
-    from huggingface_hub._login import _login
-
-    _login(token=HF_TOKEN, add_to_git_credential=False)
 
 
 ############################
@@ -274,6 +268,11 @@ def get_args():
         type=str,
         default="results/rm-bench",
         help="Directory to save per-example scores JSON (default: results/rm-bench)",
+    )
+    parser.add_argument(
+        "--do_not_save",
+        action="store_true",
+        help="Skip writing per-example scores and metrics JSON to --output_dir (accuracy still prints to stdout).",
     )
     args = parser.parse_args()
     args.torch_dtype = torch_dtype_mapping(args.torch_dtype)
@@ -534,6 +533,15 @@ def main():
 
     filename = os.path.basename(args.datapath).replace(".json", "")
     model_name = args.model.rstrip("/").split("/")[-1]
+    acc_dict = compute_accuracy(dataset_json)
+    print(f"\nAccuracy of {model_name} on {filename}:")
+    for k, v in acc_dict.items():
+        print(f"  {k}: {v:.4f}")
+
+    if args.do_not_save:
+        logger.info("--do_not_save set: skipping local writes of per-example scores and metrics.")
+        return
+
     output_dir = os.path.join(args.output_dir, args.model.replace("/", "__"))
     os.makedirs(output_dir, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -541,11 +549,6 @@ def main():
     with open(output_path, "w") as f:
         json.dump(dataset_json, f, indent=4, ensure_ascii=False)
     logger.info(f"Saved per-example scores to {output_path}")
-
-    acc_dict = compute_accuracy(dataset_json)
-    print(f"\nAccuracy of {model_name} on {filename}:")
-    for k, v in acc_dict.items():
-        print(f"  {k}: {v:.4f}")
 
     # also write the aggregate metrics to a sibling JSON for easy machine reading
     metrics_path = os.path.join(output_dir, f"{filename}_{model_name}_{ts}_metrics.json")

@@ -46,13 +46,6 @@ from rewardbench import (
 from rewardbench.constants import EXAMPLE_COUNTS, SUBSET_MAPPING
 from rewardbench.utils import calculate_scores_per_section
 
-# get token from HF_TOKEN env variable, but if it doesn't exist pass none
-HF_TOKEN = os.getenv("HF_TOKEN", None)
-# this is necessary to automatically log in when running this script in docker/batch beaker jobs
-if HF_TOKEN is not None:
-    from huggingface_hub._login import _login
-
-    _login(token=HF_TOKEN, add_to_git_credential=False)
 
 
 def calculate_subset_score(subset_data):
@@ -83,7 +76,7 @@ def get_args():
         default=None,
         help="fastchat chat template (optional, uses tokenizer template if not specified)",
     )
-    parser.add_argument("--do_not_save", action="store_true", help="do not save results to hub (for debugging)")
+    parser.add_argument("--do_not_save", action="store_true", help="Skip writing results to disk (accuracy still prints to stdout).")
     parser.add_argument("--batch_size", type=int, default=6, help="batch size for inference")
     parser.add_argument(
         "--pref_sets", action="store_true", help="run on common preference sets instead of our custom eval set"
@@ -375,31 +368,27 @@ def main():
     # Upload results to hub
     ############################
     sub_path = "eval-set/" if not args.pref_sets else "pref-sets/"
-    results_url = save_to_hub(
-        results_grouped,
-        args.model + save_modifier,
-        sub_path,
-        args.debug,
-        local_only=args.do_not_save,
-    )
     if not args.do_not_save:
-        logger.info(f"Uploaded reward model results to {results_url}")
+        results_path = save_to_hub(
+            results_grouped,
+            args.model + save_modifier,
+            sub_path,
+            args.debug,
+            local_only=True,
+        )
+        logger.info(f"Wrote reward model results to {results_path}")
 
-    # upload chosen-rejected with scores
-    # create new json with scores and upload
-    scores_dict = out_dataset.to_dict()
-    scores_dict["model"] = args.model
-    scores_dict["model_type"] = "DPO"
-    scores_dict["chat_template"] = args.chat_template
-    sub_path_scores = "eval-set-scores/" if not args.pref_sets else "pref-sets-scores/"
+        # write chosen-rejected with scores
+        scores_dict = out_dataset.to_dict()
+        scores_dict["model"] = args.model
+        scores_dict["model_type"] = "DPO"
+        scores_dict["chat_template"] = args.chat_template
+        sub_path_scores = "eval-set-scores/" if not args.pref_sets else "pref-sets-scores/"
 
-    scores_url = save_to_hub(
-        scores_dict, args.model + save_modifier, sub_path_scores, args.debug, local_only=args.do_not_save
-    )
-    if args.do_not_save:
-        logger.info(f"Wrote chosen-rejected text with scores locally to {scores_url}")
-    else:
-        logger.info(f"Uploaded chosen-rejected text with scores to {scores_url}")
+        scores_path = save_to_hub(
+            scores_dict, args.model + save_modifier, sub_path_scores, args.debug, local_only=True
+        )
+        logger.info(f"Wrote chosen-rejected text with scores to {scores_path}")
 
 
 if __name__ == "__main__":

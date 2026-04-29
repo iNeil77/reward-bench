@@ -467,31 +467,20 @@ rewardbench \
 **Instruction datasets:**
 RewardBench auto-detects instruction datasets (no `chosen`/`rejected`, has `messages`) and logs model outputs without accuracy.
 
-### Result Uploading
+### Saving Results
 
-Upload results to HuggingFace Hub:
+All runners write results to the local filesystem only. There is **no
+HuggingFace Hub upload, no leaderboard submission, and no Weights & Biases
+logging**. To suppress the local write entirely (e.g., smoke testing),
+pass `--do_not_save` to any runner — accuracy still prints to stdout.
 
 ```bash
-# Upload results as dataset
-rewardbench \
-    --model=your-model \
-    --push_results_to_hub
+# Default: write results under ./results/
+rewardbench --model=your-model
 
-# Add results to model card metadata
-rewardbench \
-    --model=your-model \
-    --upload_model_metadata_to_hf
-
-# Both
-rewardbench \
-    --model=your-model \
-    --push_results_to_hub \
-    --upload_model_metadata_to_hf
+# Skip all writes
+rewardbench --model=your-model --do_not_save
 ```
-
-**Examples:**
-- Model with metadata: [vwxyzjn/rm_zephyr_new](https://huggingface.co/vwxyzjn/rm_zephyr_new)
-- Preference dataset outputs: [natolambert/rewardbench_eval_2339270924_2339270924](https://huggingface.co/datasets/natolambert/rewardbench_eval_2339270924_2339270924)
 
 ### Ensembling Models
 
@@ -620,19 +609,6 @@ docker build -f Dockerfile.vllm -t rewardbench-vllm . --platform linux/amd64
 **Auto-built on main:**
 - `nathanl/rewardbench_auto`: Base image
 - `nathanl/rewardbench_vllm_auto`: vLLM image
-
-### AI2 Infrastructure
-
-For AI2 users only:
-```bash
-# Submit evaluation jobs
-python scripts/submit_eval_jobs.py
-
-# Best-of-N sweep
-python scripts/submit_eval_jobs.py --eval_on_bon --image=nathanl/herm_bon
-
-# Note: Set beaker secret: beaker secret write HF_TOKEN <token>
-```
 
 ---
 
