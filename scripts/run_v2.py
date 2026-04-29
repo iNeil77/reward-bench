@@ -425,6 +425,17 @@ def main():
     finally:
         enable_progress_bar()
 
+    # Macro average across the six RewardBench 2 subsets (Factuality, Focus,
+    # Math, Precise IF, Safety, Ties). Each subset's score is a single scalar in
+    # [0, 1] — pairwise accuracy for the five BoN-style subsets, and the Ties
+    # composite (process_single_model) for Ties. Averaging them gives a
+    # leaderboard-style overall number comparable across models.
+    subset_scores = {k: v for k, v in results_grouped.items() if isinstance(v, (int, float))}
+    if subset_scores:
+        overall = float(np.mean(list(subset_scores.values())))
+        results_grouped["overall"] = overall
+        print(f"Overall (mean of {len(subset_scores)} subsets): {overall:.4f}")
+
     ############################
     # Write results to local disk (unless --do_not_save)
     ############################
