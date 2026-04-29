@@ -29,7 +29,9 @@ try:
 except ImportError:
     LlamaTokenizer = AutoTokenizer
 
+from .acecoder import AceCoderPipeline, build_acecoder_model
 from .armorm import ArmoRMPipeline
+from .athene import AthenePipeline, build_athene_model
 from .beaver import BeaverCostPipeline, BeaverPipeline, LlamaForScore
 from .betterpairrm import BetterPairRMPipeline
 from .grm import GRewardModel, GRMPipeline
@@ -54,7 +56,8 @@ from .starling import (
     StarlingPipeline,
     build_starling_rm,
 )
-from .worldpm import WorldPMPipeline
+from .themis import ThemisPipeline
+from .worldpm import WorldPMPipeline, build_worldpm_model
 from .ziya import ZiyaPipeline
 
 # Please open a PR if you need to add more custom modeling code / utilize existing code for you model
@@ -253,7 +256,31 @@ REWARD_MODEL_CONFIG = {
         "model_type": "Seq. Classifier",
     },
     "Qwen/WorldPM-72B": {
-        "model_builder": AutoModel.from_pretrained,
+        "model_builder": build_worldpm_model,
+        "pipeline_builder": WorldPMPipeline,
+        "quantized": False,
+        "custom_dialogue": False,
+        "model_type": "Seq. Classifier",
+        "torch_dtype": torch.bfloat16,
+    },
+    "Qwen/WorldPM-72B-RLHFLow": {
+        "model_builder": build_worldpm_model,
+        "pipeline_builder": WorldPMPipeline,
+        "quantized": False,
+        "custom_dialogue": False,
+        "model_type": "Seq. Classifier",
+        "torch_dtype": torch.bfloat16,
+    },
+    "Qwen/WorldPM-72B-UltraFeedback": {
+        "model_builder": build_worldpm_model,
+        "pipeline_builder": WorldPMPipeline,
+        "quantized": False,
+        "custom_dialogue": False,
+        "model_type": "Seq. Classifier",
+        "torch_dtype": torch.bfloat16,
+    },
+    "Qwen/WorldPM-72B-HelpSteer2": {
+        "model_builder": build_worldpm_model,
         "pipeline_builder": WorldPMPipeline,
         "quantized": False,
         "custom_dialogue": False,
@@ -271,6 +298,45 @@ REWARD_MODEL_CONFIG = {
     "Skywork/Skywork-VL-Reward-7B": {
         "model_builder": Qwen2_5_VLForConditionalGeneration.from_pretrained,
         "pipeline_builder": SkyVLPipeline,
+        "quantized": False,
+        "custom_dialogue": False,
+        "model_type": "Seq. Classifier",
+        "torch_dtype": torch.bfloat16,
+    },
+    **{
+        f"project-themis/Themis-RM-{_size}{_suffix}": {
+            "model_builder": AutoModelForSequenceClassification.from_pretrained,
+            "pipeline_builder": ThemisPipeline,
+            "quantized": False,
+            "custom_dialogue": False,
+            "model_type": "Seq. Classifier",
+            "torch_dtype": torch.bfloat16,
+        }
+        for _size in ("0.6B", "1.7B", "4B", "8B", "14B", "32B")
+        for _suffix in ("", "-PMP")
+    },
+    **{
+        f"Nexusflow/Athene-RM-{_size}": {
+            "model_builder": build_athene_model,
+            "pipeline_builder": AthenePipeline,
+            "quantized": False,
+            "custom_dialogue": False,
+            "model_type": "Seq. Classifier",
+            "torch_dtype": torch.bfloat16,
+        }
+        for _size in ("8B", "70B")
+    },
+    "TIGER-Lab/AceCodeRM-7B": {
+        "model_builder": build_acecoder_model,
+        "pipeline_builder": AceCoderPipeline,
+        "quantized": False,
+        "custom_dialogue": False,
+        "model_type": "Seq. Classifier",
+        "torch_dtype": torch.bfloat16,
+    },
+    "TIGER-Lab/AceCodeRM-32B": {
+        "model_builder": build_acecoder_model,
+        "pipeline_builder": AceCoderPipeline,
         "quantized": False,
         "custom_dialogue": False,
         "model_type": "Seq. Classifier",

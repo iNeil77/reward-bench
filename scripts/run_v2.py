@@ -96,7 +96,7 @@ def get_args():
     )
     parser.add_argument("--do_not_save", action="store_true", help="do not save results to hub (for debugging)")
     parser.add_argument("--batch_size", type=int, default=64, help="batch size for inference")
-    parser.add_argument("--max_length", type=int, default=2048, help="Max length of RM inputs (passed to pipeline)")
+    parser.add_argument("--max_length", type=int, default=2560, help="Max length of RM inputs (passed to pipeline)")
     parser.add_argument("--debug", action="store_true", help="Debug on small set of examples")
     parser.add_argument(
         "--quantized", action="store_true", help="enable quantization for models that are not quantized by default"

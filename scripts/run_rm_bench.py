@@ -241,8 +241,8 @@ def get_args():
         required=True,
         help="path to an RM-Bench JSON file (e.g. data/rm-bench/total_dataset.json or data/rm-bench/chat_filtered.json)",
     )
-    parser.add_argument("--batch_size", type=int, default=8, help="batch size for inference")
-    parser.add_argument("--max_length", type=int, default=2048, help="Max length of RM inputs (passed to pipeline)")
+    parser.add_argument("--batch_size", type=int, default=64, help="batch size for inference")
+    parser.add_argument("--max_length", type=int, default=2560, help="Max length of RM inputs (passed to pipeline)")
     parser.add_argument(
         "--debug", action="store_true", help="run on only 10 examples per style variant for debugging"
     )
