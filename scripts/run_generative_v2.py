@@ -706,7 +706,10 @@ def main():
         scores_dict, model_name, sub_path_scores, args.debug, local_only=args.do_not_save, best_of_n=True
     )
 
-    logger.info(f"Uploading chosen-rejected text with scores to {scores_url}")
+    if args.do_not_save:
+        logger.info(f"Wrote chosen-rejected text with scores locally to {scores_url}")
+    else:
+        logger.info(f"Uploaded chosen-rejected text with scores to {scores_url}")
 
 
 if __name__ == "__main__":

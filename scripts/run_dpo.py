@@ -396,7 +396,10 @@ def main():
     scores_url = save_to_hub(
         scores_dict, args.model + save_modifier, sub_path_scores, args.debug, local_only=args.do_not_save
     )
-    logger.info(f"Uploading chosen-rejected text with scores to {scores_url}")
+    if args.do_not_save:
+        logger.info(f"Wrote chosen-rejected text with scores locally to {scores_url}")
+    else:
+        logger.info(f"Uploaded chosen-rejected text with scores to {scores_url}")
 
 
 if __name__ == "__main__":

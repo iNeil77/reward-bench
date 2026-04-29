@@ -394,33 +394,43 @@ def main():
     # Process subsets in parallel
     present_subsets = np.unique(subsets)
 
+    # Silence the per-subset `Filter (num_proc=1)` progress bars that datasets
+    # prints inside calculate_subset_score and the display-recompute below —
+    # otherwise 6-7 bars interleave with the "subset: score" lines.
+    from datasets.utils.logging import disable_progress_bar, enable_progress_bar
+
+    disable_progress_bar()
+
     # Use ProcessPoolExecutor for parallel subset processing
     max_workers = min(len(present_subsets), args.num_proc)
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        future_to_subset = {
-            executor.submit(calculate_subset_score, (subset, out_dataset)): subset
-            for subset in present_subsets
-        }
+    try:
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            future_to_subset = {
+                executor.submit(calculate_subset_score, (subset, out_dataset)): subset
+                for subset in present_subsets
+            }
 
-        for future in as_completed(future_to_subset):
-            subset, score, ties_results = future.result()
+            for future in as_completed(future_to_subset):
+                subset, score, ties_results = future.result()
 
-            # Update results for ties subset if needed
-            if ties_results is not None:
-                ties_indices = [i for i, s in enumerate(out_dataset["subset"]) if s == "ties"]
-                out_dataset_df = out_dataset.to_pandas()
-                for i, ties_idx in enumerate(ties_indices):
-                    out_dataset_df.at[ties_idx, "results"] = ties_results["results"][i]
-                out_dataset = Dataset.from_pandas(out_dataset_df)
-                print(f"{subset}: Overall score {score}")
-            else:
-                # Reconstruct num_correct and num_total for display
-                subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset, num_proc=1)
-                num_correct = int(score * len(subset_dataset["results"]))
-                num_total = len(subset_dataset["results"])
-                print(f"{subset}: {num_correct}/{num_total} ({score})")
+                # Update results for ties subset if needed
+                if ties_results is not None:
+                    ties_indices = [i for i, s in enumerate(out_dataset["subset"]) if s == "ties"]
+                    out_dataset_df = out_dataset.to_pandas()
+                    for i, ties_idx in enumerate(ties_indices):
+                        out_dataset_df.at[ties_idx, "results"] = ties_results["results"][i]
+                    out_dataset = Dataset.from_pandas(out_dataset_df)
+                    print(f"{subset}: Overall score {score}")
+                else:
+                    # Reconstruct num_correct and num_total for display
+                    subset_dataset = out_dataset.filter(lambda example: example["subset"] == subset, num_proc=1)
+                    num_correct = int(score * len(subset_dataset["results"]))
+                    num_total = len(subset_dataset["results"])
+                    print(f"{subset}: {num_correct}/{num_total} ({score})")
 
-            results_grouped[subset] = score
+                results_grouped[subset] = score
+    finally:
+        enable_progress_bar()
 
     ############################
     # Upload results to hub
@@ -456,7 +466,10 @@ def main():
             local_only=args.do_not_save,
             best_of_n=True,
         )
-        logger.info(f"Uploading chosen-rejected text with scores to {scores_url}")
+        if not args.do_not_save:
+            logger.info(f"Uploaded chosen-rejected text with scores to {scores_url}")
+        else:
+            logger.info(f"Wrote chosen-rejected text with scores locally to {scores_url}")
     else:
         logger.info("Not uploading chosen-rejected text with scores due to model compatibility")
 

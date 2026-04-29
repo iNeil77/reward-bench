@@ -121,7 +121,9 @@ def save_to_hub(
         best_of_n: if True, save to version 2 dataset results repo on HF.
 
     Returns:
-        scores_url: URL to the saved scores (optional).
+        scores_url: URL to the uploaded scores if uploaded, otherwise the local
+            path where the results JSON was written (when ``local_only=True`` or
+            ``debug=True``). Never ``None``, so callers can always log the location.
     """
     scores_path = f"./results/{target_path}{model_name}.json"
 
@@ -152,7 +154,7 @@ def save_to_hub(
         )
         return scores_url
     else:
-        return None
+        return scores_path
 
 
 def map_conversations_testsets(example):
