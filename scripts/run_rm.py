@@ -365,6 +365,12 @@ def main():
                     score_rejected_batch = [result["score"] for result in rewards_rejected]
                 # for classes that directly output scores (custom code)
                 else:
+                    # Stock SequenceClassifier models with num_labels=1 return (B, 1) tensors;
+                    # squeeze the trailing singleton so downstream aggregation sees flat scalars.
+                    if rewards_chosen.dim() > 1 and rewards_chosen.shape[-1] == 1:
+                        rewards_chosen = rewards_chosen.squeeze(-1)
+                    if rewards_rejected.dim() > 1 and rewards_rejected.shape[-1] == 1:
+                        rewards_rejected = rewards_rejected.squeeze(-1)
                     score_chosen_batch = (
                         rewards_chosen.float().cpu().numpy().tolist()
                     )  # cast to float in case of bfloat16

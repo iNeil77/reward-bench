@@ -493,6 +493,12 @@ def main():
                     score_chosen_batch = [r["score"] for r in rewards_chosen]
                     score_rejected_batch = [r["score"] for r in rewards_rejected]
                 else:
+                    # Stock SequenceClassifier models with num_labels=1 return (B, 1) tensors;
+                    # squeeze the trailing singleton so downstream aggregation sees flat scalars.
+                    if rewards_chosen.dim() > 1 and rewards_chosen.shape[-1] == 1:
+                        rewards_chosen = rewards_chosen.squeeze(-1)
+                    if rewards_rejected.dim() > 1 and rewards_rejected.shape[-1] == 1:
+                        rewards_rejected = rewards_rejected.squeeze(-1)
                     score_chosen_batch = rewards_chosen.float().cpu().numpy().tolist()
                     score_rejected_batch = rewards_rejected.float().cpu().numpy().tolist()
 

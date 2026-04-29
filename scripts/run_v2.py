@@ -360,6 +360,10 @@ def main():
                 scores_batch = [result["score"] for result in rewards]
             # for classes that directly output scores (custom code)
             else:
+                # Stock SequenceClassifier models with num_labels=1 return (B, 1) tensors;
+                # squeeze the trailing singleton so downstream aggregation sees flat scalars.
+                if rewards.dim() > 1 and rewards.shape[-1] == 1:
+                    rewards = rewards.squeeze(-1)
                 scores_batch = rewards.float().cpu().numpy().tolist()
 
             scores.extend(scores_batch)
