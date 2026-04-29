@@ -47,9 +47,15 @@ def build_worldpm_model(
     Loads the custom ``Qwen2ForRewardModel`` from the checkpoint via
     ``AutoModel`` + ``trust_remote_code``, after patching ``pad_token_id``
     onto the config so ``Qwen2Model.__init__`` doesn't raise.
+
+    WorldPM *requires* ``trust_remote_code=True`` — without it, AutoModel
+    falls back to the canonical Qwen2Model backbone and silently drops the
+    score head, producing random-quality outputs. We force it to True here
+    so a CLI ``--trust_remote_code`` omission doesn't silently break scoring.
     """
     # drop kwargs that don't apply to AutoModel
     kwargs.pop("quantization_config", None)
+    trust_remote_code = True  # hard-required for this model family
 
     config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=trust_remote_code)
 
@@ -139,16 +145,27 @@ class WorldPMPipeline:
                 use_cache=False,
             )
 
-        # Qwen2ForRewardModel returns SequenceClassifierOutputWithPast with .logits (B, 1) or (B,)
-        if hasattr(outputs, "logits"):
+        # Qwen2ForRewardModel returns SequenceClassifierOutputWithPast with .logits (B, 1) or (B,).
+        # If we got back hidden states instead (shape (B, T, H)), the custom class failed to load
+        # — most commonly because trust_remote_code=False was passed through. Fail loudly.
+        if getattr(outputs, "logits", None) is not None:
             scores = outputs.logits
-        elif isinstance(outputs, (list, tuple)):
+        elif isinstance(outputs, (list, tuple)) and len(outputs) > 0:
             scores = outputs[0]
-        elif isinstance(outputs, dict):
-            scores = next(iter(outputs.values()))
         else:
-            scores = outputs
+            raise RuntimeError(
+                "WorldPM model returned no `logits` attribute — the custom "
+                "Qwen2ForRewardModel did not load (likely loaded as a plain Qwen2Model). "
+                "Ensure trust_remote_code=True is honored during model loading."
+            )
 
+        if scores.dim() > 2:
+            raise RuntimeError(
+                f"WorldPM pipeline expected scalar/(B,1) scores but got shape {tuple(scores.shape)}. "
+                "This indicates the Qwen2ForRewardModel head did not run — check that the custom "
+                "model class loaded correctly (load report should say 'Qwen2ForRewardModel', not "
+                "'Qwen2Model')."
+            )
         if scores.dim() > 1 and scores.shape[-1] == 1:
             scores = scores.squeeze(-1)
         return scores
