@@ -36,6 +36,7 @@
   - [RewardBench CLI](#rewardbench-cli)
   - [RewardBench 2 (Scripts)](#rewardbench-2-scripts)
   - [RM-Bench (Scripts)](#rm-bench-scripts)
+  - [JudgeBench (Scripts)](#judgebench-scripts)
   - [Generative Models (LLM-as-judge)](#generative-models-llm-as-judge)
   - [DPO Models](#dpo-models)
 - [Configuration & Performance](#configuration--performance)
@@ -65,6 +66,7 @@
 - `scripts/run_v2.py`: RewardBench 2 with best-of-4 and Ties data
 - `scripts/run_rm.py`: Advanced reward model evaluation
 - `scripts/run_rm_bench.py`: RM-Bench (style-robustness) evaluation
+- `scripts/run_judge_bench.py`: JudgeBench (hard objective prompts) evaluation
 - `scripts/run_dpo.py`: DPO model evaluation
 - `scripts/run_generative_v2.py`: LLM-as-judge evaluation
 
@@ -265,6 +267,36 @@ uv run python scripts/run_rm_bench.py \
 **Outputs:**
 - `results/rm-bench/<model>/<dataset>_<model>_<timestamp>.json`: per-example scores (3 chosen, 3 rejected per row)
 - `results/rm-bench/<model>/<dataset>_<model>_<timestamp>_metrics.json`: aggregate hard/normal/easy accuracy per domain plus `total_avg_acc`
+
+### JudgeBench (Scripts)
+
+[JudgeBench](https://huggingface.co/datasets/ScalerLab/JudgeBench) evaluates reward/judge models on 620 hard, objectively-verifiable prompts drawn from LiveBench, LiveCodeBench, and MMLU-Pro. Each example has a single `chosen` (correct) and `rejected` (incorrect) response; scoring reports pairwise accuracy per category (knowledge / reasoning / math / coding) plus micro/macro averages.
+
+The dataset JSON files are bundled under [`data/judge-bench/`](data/judge-bench/), so evaluation works out of the box.
+
+```bash
+# Full eval across all 4 categories
+uv run python scripts/run_judge_bench.py \
+    --model=your-model \
+    --datapath=data/judge-bench/total_dataset.json \
+    --batch_size=8
+
+# Single category (knowledge / reasoning / math / coding)
+uv run python scripts/run_judge_bench.py \
+    --model=your-model \
+    --datapath=data/judge-bench/coding_filtered.json \
+    --batch_size=16
+
+# Quick smoke test (10 examples)
+uv run python scripts/run_judge_bench.py \
+    --model=your-model \
+    --datapath=data/judge-bench/total_dataset.json \
+    --debug
+```
+
+**Outputs:**
+- `results/judge-bench/<model>/<dataset>_<model>_<timestamp>.json`: per-example chosen/rejected scores
+- `results/judge-bench/<model>/<dataset>_<model>_<timestamp>_metrics.json`: per-category accuracy, per-subset breakdown, plus `micro_avg_acc` and `macro_avg_acc`
 
 ### Generative Models (LLM-as-judge)
 
@@ -495,6 +527,7 @@ For training reward models, use [`open-instruct`](https://github.com/allenai/ope
 ├── README.md                   <- This file
 ├── analysis/                   <- Analysis tools
 ├── data/rm-bench/              <- Bundled RM-Bench JSON eval files
+├── data/judge-bench/           <- Bundled JudgeBench JSON eval files
 ├── rewardbench/                <- Core utils and models
 │   ├── models/                 <- Model implementations
 │   └── *.py                    <- Utilities
@@ -502,6 +535,7 @@ For training reward models, use [`open-instruct`](https://github.com/allenai/ope
 │   ├── run_v2.py              <- RewardBench 2
 │   ├── run_rm.py              <- Reward models
 │   ├── run_rm_bench.py        <- RM-Bench (style robustness)
+│   ├── run_judge_bench.py     <- JudgeBench (hard objective prompts)
 │   ├── run_dpo.py             <- DPO models
 │   └── configs/               <- Model configs
 ├── tests/                      <- Unit tests
