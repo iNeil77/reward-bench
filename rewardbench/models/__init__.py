@@ -315,6 +315,18 @@ REWARD_MODEL_CONFIG = {
         for _size in ("0.6B", "1.7B", "4B", "8B", "14B", "32B")
         for _suffix in ("", "-PMP")
     },
+    # V1.1 variants: 0.6B / 1.7B / 4B / 8B only, no PMP counterparts.
+    **{
+        f"project-themis/Themis-RM-{_size}-V1.1": {
+            "model_builder": AutoModelForSequenceClassification.from_pretrained,
+            "pipeline_builder": ThemisPipeline,
+            "quantized": False,
+            "custom_dialogue": False,
+            "model_type": "Seq. Classifier",
+            "torch_dtype": torch.bfloat16,
+        }
+        for _size in ("0.6B", "1.7B", "4B", "8B")
+    },
     **{
         f"Nexusflow/Athene-RM-{_size}": {
             "model_builder": build_athene_model,
