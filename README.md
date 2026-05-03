@@ -31,21 +31,32 @@
 ## Table of Contents
 - [Overview](#overview)
 - [Installation](#installation)
+  - [Quick Install](#quick-install)
+  - [Development Install](#development-install)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
   - [RewardBench CLI](#rewardbench-cli)
   - [RewardBench 2 (Scripts)](#rewardbench-2-scripts)
   - [RM-Bench (Scripts)](#rm-bench-scripts)
   - [JudgeBench (Scripts)](#judgebench-scripts)
+  - [Code Reward Bench (Scripts)](#code-reward-bench-scripts)
   - [Generative Models (LLM-as-judge)](#generative-models-llm-as-judge)
   - [DPO Models](#dpo-models)
 - [Configuration & Performance](#configuration--performance)
+  - [Default Settings](#default-settings)
+  - [Attention Implementations](#attention-implementations)
+  - [Performance Tuning](#performance-tuning)
 - [Advanced Usage](#advanced-usage)
   - [Custom Datasets](#custom-datasets)
-  - [Result Uploading](#result-uploading)
+  - [Saving Results](#saving-results)
   - [Ensembling Models](#ensembling-models)
   - [Best-of-N Rankings](#best-of-n-rankings)
+  - [Leaderboard Section Scores](#leaderboard-section-scores)
 - [Development](#development)
+  - [Contributing Models](#contributing-models)
+  - [Training](#training)
+  - [Repository Structure](#repository-structure)
+  - [Code Quality](#code-quality)
 - [Docker & Maintenance](#docker--maintenance)
 - [Citation](#citation)
 
@@ -67,6 +78,7 @@
 - `scripts/run_rm.py`: Advanced reward model evaluation
 - `scripts/run_rm_bench.py`: RM-Bench (style-robustness) evaluation
 - `scripts/run_judge_bench.py`: JudgeBench (hard objective prompts) evaluation
+- `scripts/run_code_reward_bench.py`: Themis Code Reward Bench (code-preference evaluation with optional aspect-specific prompts for Themis models)
 - `scripts/run_dpo.py`: DPO model evaluation
 - `scripts/run_generative_v2.py`: LLM-as-judge evaluation
 
@@ -134,8 +146,8 @@ export HF_TOKEN="your_token_here"
 
 ## Quick Start
 
-> **Recommended flags for external users** (included in every example below):
-> - `--do_not_save`: write results under `results/` locally instead of pushing to AI2's `allenai/reward-bench-*-results` datasets (non-AI2 tokens will get `403 Forbidden` on upload). Applies to `rewardbench`, `run_rm.py`, `run_v2.py`, `run_dpo.py`. RM-Bench and JudgeBench always write locally, so the flag isn't needed there.
+> **Flags shown in every example below:**
+> - `--do_not_save`: skip writing results to disk entirely (accuracy still prints to stdout). The default behavior is to write results JSON locally under `./results/` — there is no HuggingFace Hub upload, leaderboard submission, or Weights & Biases logging. Available on every runner.
 > - `--trust_remote_code`: required for models that ship custom modeling code via `auto_map` (e.g., Qwen/WorldPM, some Nemotron variants). Safe to leave on by default; a no-op for stock architectures.
 
 **Evaluate a reward model:**
@@ -262,7 +274,7 @@ See [eval_configs.yaml](scripts/configs/eval_configs.yaml) for model-specific co
 
 The dataset JSON files are bundled under [`data/rm-bench/`](data/rm-bench/), so evaluation works out of the box.
 
-`run_rm_bench.py` always writes results locally under `results/rm-bench/`, so `--do_not_save` isn't needed. `--trust_remote_code` is still recommended if your model ships custom code via `auto_map`.
+By default, `run_rm_bench.py` writes per-example scores and metrics under `results/rm-bench/`. Pass `--do_not_save` to skip disk writes. `--trust_remote_code` is recommended if your model ships custom code via `auto_map`.
 
 ```bash
 # Full eval on all domains
@@ -297,7 +309,7 @@ uv run python scripts/run_rm_bench.py \
 
 The dataset JSON files are bundled under [`data/judge-bench/`](data/judge-bench/), so evaluation works out of the box.
 
-`run_judge_bench.py` always writes results locally under `results/judge-bench/`, so `--do_not_save` isn't needed. `--trust_remote_code` is still recommended if your model ships custom code via `auto_map`.
+By default, `run_judge_bench.py` writes per-example scores and metrics under `results/judge-bench/`. Pass `--do_not_save` to skip disk writes. `--trust_remote_code` is recommended if your model ships custom code via `auto_map`.
 
 ```bash
 # Full eval across all 4 categories
@@ -325,6 +337,41 @@ uv run python scripts/run_judge_bench.py \
 **Outputs:**
 - `results/judge-bench/<model>/<dataset>_<model>_<timestamp>.json`: per-example chosen/rejected scores
 - `results/judge-bench/<model>/<dataset>_<model>_<timestamp>_metrics.json`: per-category accuracy, per-subset breakdown, plus `micro_avg_acc` and `macro_avg_acc`
+
+### Code Reward Bench (Scripts)
+
+[Themis Code Reward Bench](https://huggingface.co/datasets/project-themis/Themis-CodeRewardBench) (CRB) evaluates reward models on 8,866 pairwise code-preference rows spanning 5 aspects (`Functional_Correctness`, `Memory_Efficiency`, `Readability_Maintainability`, `Runtime_Efficiency`, `Security_Hardness`), 8 programming languages, and 19 source benchmarks. Scoring reports pairwise accuracy overall, macro-averaged over aspects, and per-aspect / per-language / per-subset.
+
+Data is streamed directly from HuggingFace (no local bundling). For Themis reward models (`project-themis/Themis-RM-*`), `--use_system_prompts` injects the Themis judge-persona system prompt, and adding `--use_aspect_prompts` selects a per-row aspect-specific variant instead of the combined `Full` prompt. For non-Themis models those flags are ignored (with a logged warning) and the tokenizer's chat template is applied with no system message.
+
+```bash
+# Vanilla: any reward model
+uv run python scripts/run_code_reward_bench.py \
+    --model=your-model \
+    --batch_size=16 \
+    --max_length=4096 \
+    --trust_remote_code
+
+# Themis with aspect-specific system prompts (recommended for Themis)
+uv run python scripts/run_code_reward_bench.py \
+    --model=project-themis/Themis-RM-4B \
+    --use_system_prompts \
+    --use_aspect_prompts \
+    --batch_size=16 \
+    --max_length=4096 \
+    --trust_remote_code
+
+# Quick smoke test (32 examples)
+uv run python scripts/run_code_reward_bench.py \
+    --model=project-themis/Themis-RM-0.6B \
+    --use_system_prompts --use_aspect_prompts \
+    --debug \
+    --trust_remote_code
+```
+
+**Outputs:**
+- `results/code-reward-bench/<model>/<model>_<timestamp>_scores.json`: per-example chosen/rejected scores with id/subset/aspect/language
+- `results/code-reward-bench/<model>/<model>_<timestamp>_metrics.json`: overall and macro-aspect accuracy plus per-aspect / per-language / per-subset breakdowns
 
 ### Generative Models (LLM-as-judge)
 
@@ -453,7 +500,9 @@ python scripts/run_v2.py \
 rewardbench \
     --model=your-model \
     --dataset=allenai/ultrafeedback_binarized_cleaned \
-    --split=test_gen
+    --split=test_gen \
+    --do_not_save \
+    --trust_remote_code
 ```
 
 **From local JSON:**
@@ -461,7 +510,9 @@ rewardbench \
 rewardbench \
     --model=your-model \
     --dataset=/path/to/dataset.jsonl \
-    --load_json
+    --load_json \
+    --do_not_save \
+    --trust_remote_code
 ```
 
 **Instruction datasets:**
@@ -565,7 +616,11 @@ For training reward models, use [`open-instruct`](https://github.com/allenai/ope
 │   ├── run_rm.py              <- Reward models
 │   ├── run_rm_bench.py        <- RM-Bench (style robustness)
 │   ├── run_judge_bench.py     <- JudgeBench (hard objective prompts)
+│   ├── run_code_reward_bench.py <- Themis Code Reward Bench
 │   ├── run_dpo.py             <- DPO models
+│   ├── run_generative.py      <- Generative judges (v1)
+│   ├── run_generative_v2.py   <- Generative judges (RewardBench 2)
+│   ├── run_bon.py             <- Best-of-N ranking
 │   └── configs/               <- Model configs
 ├── tests/                      <- Unit tests
 ├── Dockerfile                  <- Docker build
